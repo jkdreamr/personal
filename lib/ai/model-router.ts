@@ -64,59 +64,72 @@ export type TaskKind =
   | "autocomplete"
   | "second_opinion"; // explicit adversarial review — Nemotron
 
-/** Resolve the model id for a task. Synthesis is always Owl; trivial kinds use the fast model. */
-export function routeModel(_preference: ModelPreference, kind: TaskKind): ModelId {
-  switch (kind) {
-    case "second_opinion":
-      return MODELS.reviewer;
-    case "autocomplete":
-    case "title":
-    case "classify":
-    case "rewrite":
-      return MODELS.fast;
-    case "synthesis":
-    default:
-      // Owl Alpha by default for every meaningful task, regardless of service.
-      return MODELS.primary;
-  }
-}
-
 /**
- * Resilience fallback — tried IN ORDER only when a model fails, never to call several models
- * on success. Owl Alpha is an alpha model and can be flaky/unavailable, so the chain degrades
- * Owl → GPT-OSS → Nemotron (all free) to keep a real result coming back. Laguna is never used.
+ * The universal safety net: every model we have, ordered best-general-quality first, the tiny 8B
+ * models last. Appended (filtered to configured providers) to every "quality" task chain so that as
+ * long as ANY provider is reachable, the task returns a real result instead of erroring.
  */
-export function fallbackChain(preferred: ModelId): ModelId[] {
-  if (preferred === MODELS.reviewer) {
-    // An explicit second opinion degrades to Owl, then GPT-OSS.
-    return Array.from(new Set<ModelId>([MODELS.reviewer, MODELS.primary, MODELS.fast]));
-  }
-  return Array.from(new Set<ModelId>([preferred, MODELS.primary, MODELS.fast, MODELS.reviewer]));
-}
+const SAFETY_NET: readonly string[] = [
+  MODELS.primary,
+  EXTRA_MODELS.gemini,
+  EXTRA_MODELS.groq70b,
+  EXTRA_MODELS.cerebras70b,
+  MODELS.reviewer,
+  MODELS.fast,
+  MODELS.mistral,
+  EXTRA_MODELS.groq8b,
+  EXTRA_MODELS.cerebras8b,
+];
 
 /**
- * Task-aware routing. Each kind has an ordered candidate list (best fit first) spanning providers;
- * the chain is filtered to whichever providers are configured and tried in order until one works.
- * Reasoning behind the ordering:
- * - autocomplete / title / classify: latency dominates → Cerebras/Groq (fastest) first.
- * - rewrite: quick but quality matters a little → fast 70Bs, then Gemini, then OpenRouter free.
- * - synthesis: quality first → Owl (default), then Gemini Flash (strong + huge context for long docs),
- *   then a fast 70B, then the always-free OpenRouter models, then Mistral.
+ * Synthesis lead is chosen by the service's declared strength (services.ts `model`), then backed by
+ * the rest for resilience — this is how we route "each model to its strength":
+ * - "primary" (Owl): the best generalist writer/synthesiser — the default for most services. Gemini
+ *   (1M context) is the first fallback so long, source-heavy work (Research/Brief/Meeting/Compare/
+ *   Verify) keeps all of its context.
+ * - "reviewer" (Nemotron 550B): reasoning / adversarial. Challenge leads here to play to its strength,
+ *   with Owl right behind.
+ * - "fast": light structuring (Notes) — the fastest *capable* models (Groq/Cerebras 70B) lead for low
+ *   latency, with Owl as the quality backstop.
+ */
+const SYNTHESIS_BY_PREF: Record<ModelPreference, readonly string[]> = {
+  primary: [MODELS.primary, EXTRA_MODELS.gemini, EXTRA_MODELS.groq70b, EXTRA_MODELS.cerebras70b, MODELS.fast, MODELS.reviewer, MODELS.mistral],
+  reviewer: [MODELS.reviewer, MODELS.primary, EXTRA_MODELS.gemini, EXTRA_MODELS.groq70b, EXTRA_MODELS.cerebras70b, MODELS.fast, MODELS.mistral],
+  fast: [EXTRA_MODELS.groq70b, EXTRA_MODELS.cerebras70b, MODELS.fast, MODELS.primary, EXTRA_MODELS.gemini, MODELS.mistral],
+};
+
+/**
+ * Non-synthesis candidate lists (best fit first), spanning providers:
+ * - autocomplete / title / classify: latency dominates → Cerebras/Groq (fastest) lead. Best-effort,
+ *   so these stay lean (no heavy tail — a missed suggestion is silent, never a surfaced error).
+ * - rewrite (Continue / Improve): quick but quality matters → fast 70Bs, then Gemini.
  * - second_opinion: a strong, *different* model for an independent take → Nemotron, Gemini, 70B.
  */
-const CANDIDATES: Record<TaskKind, string[]> = {
+const CANDIDATES: Record<Exclude<TaskKind, "synthesis">, readonly string[]> = {
   autocomplete: [EXTRA_MODELS.cerebras8b, EXTRA_MODELS.groq8b, EXTRA_MODELS.groq70b, MODELS.fast, MODELS.primary],
   title: [EXTRA_MODELS.groq8b, EXTRA_MODELS.cerebras8b, MODELS.fast, MODELS.primary],
   classify: [EXTRA_MODELS.groq8b, EXTRA_MODELS.cerebras8b, MODELS.fast, MODELS.primary],
   rewrite: [EXTRA_MODELS.groq70b, EXTRA_MODELS.cerebras70b, EXTRA_MODELS.gemini, MODELS.fast, MODELS.primary],
-  synthesis: [MODELS.primary, EXTRA_MODELS.gemini, EXTRA_MODELS.groq70b, EXTRA_MODELS.cerebras70b, MODELS.fast, MODELS.reviewer, MODELS.mistral],
   second_opinion: [MODELS.reviewer, EXTRA_MODELS.gemini, EXTRA_MODELS.groq70b, MODELS.primary, MODELS.fast],
 };
 
-/** The ordered list of models to try for a task kind, limited to configured providers. */
-export function chainFor(kind: TaskKind): string[] {
-  const chain = CANDIDATES[kind].filter((m) => modelEnabled(m));
-  // Guarantee a usable OpenRouter free model is present when its key is set.
-  if (modelEnabled(MODELS.fast) && !chain.includes(MODELS.fast)) chain.push(MODELS.fast);
+/** Kinds where a slow, lower-quality answer beats an error → append the full safety net. */
+const EXHAUSTIVE: ReadonlySet<TaskKind> = new Set<TaskKind>(["synthesis", "rewrite", "second_opinion"]);
+
+/**
+ * The ordered list of models to try for a task, limited to configured providers and tried until one
+ * succeeds. For synthesis, `preference` (the service's declared strength) selects the lead. Quality
+ * kinds get the exhaustive safety-net tail so they never error while any provider is up; lean,
+ * best-effort kinds keep just a guaranteed OpenRouter fallback.
+ */
+export function chainFor(kind: TaskKind, preference: ModelPreference = "primary"): string[] {
+  const base = kind === "synthesis" ? SYNTHESIS_BY_PREF[preference] : CANDIDATES[kind];
+  let chain = base.filter((m) => modelEnabled(m));
+  if (EXHAUSTIVE.has(kind)) {
+    chain = chain.concat(SAFETY_NET.filter((m) => modelEnabled(m)));
+  } else {
+    if (modelEnabled(MODELS.fast)) chain.push(MODELS.fast);
+    if (modelEnabled(MODELS.primary)) chain.push(MODELS.primary);
+  }
   return Array.from(new Set(chain));
 }

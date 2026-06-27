@@ -107,10 +107,21 @@ mistral-small-latest                                        # Mistral — cross-
 
 **Task-aware routing** (`lib/ai/model-router.ts`, `chainFor(kind)`): each kind of work has an ordered
 chain of best-fit models, filtered to whichever providers you've configured, tried in order until one
-succeeds. Latency-sensitive work (autocomplete, titles, classification) leads with Cerebras/Groq;
-quick rewrites lead with a fast 70B; full synthesis leads with Owl, then Gemini (huge context), then a
-fast 70B, then the always-free OpenRouter models, then Mistral; an explicit second opinion leads with a
-strong, *different* reviewer (Nemotron). Provider routing lives in `lib/ai/providers.ts`.
+succeeds. Each model is matched to its strength:
+
+- **Latency-sensitive** work (autocomplete, titles, classification) leads with Cerebras/Groq (fastest
+  inference). These stay lean — a missed suggestion is silent, never an error.
+- **Quick rewrites** (Continue / Improve) lead with a fast 70B, then Gemini.
+- **Full synthesis** leads with the *service's declared strength* (`services.ts` `model`): most
+  services → **Owl** (best generalist), with Gemini's 1M context as the first fallback for long,
+  source-heavy work; **Challenge** → **Nemotron** (reasoning/adversarial); **Notes** → a fast 70B.
+- **Explicit second opinion** leads with a strong, *different* reviewer (Nemotron).
+
+**Always a fallback (no errors).** Quality tasks (synthesis, rewrite, second opinion) append an
+*exhaustive safety net* — every other configured model, best→smallest — so as long as one provider is
+reachable, a real result comes back. A failure on any one model (including an auth error from a single
+bad provider key) just advances to the next model on a different provider; only user cancellation
+stops the chain. Provider routing lives in `lib/ai/providers.ts`; the chains in `lib/ai/model-router.ts`.
 
 Output is requested as JSON, extracted robustly, validated with Zod, and repaired once on failure.
 Capabilities (e.g. JSON mode) are queried from OpenRouter and cached; when unknown, Harbor assumes

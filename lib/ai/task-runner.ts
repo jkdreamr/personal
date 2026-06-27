@@ -151,11 +151,11 @@ export async function runTask(input: RunInput, demo: boolean): Promise<RunResult
     voiceProfile: input.voiceProfile,
   });
 
-  // Task-aware, provider-aware chain. A full service generation is "synthesis" (quality first:
-  // Owl → Gemini → fast 70B → OpenRouter free → Mistral); an explicit second opinion routes to a
+  // Task-aware, provider-aware chain. A full service generation is "synthesis" led by the service's
+  // declared strength (e.g. Challenge → Nemotron, Notes → fast 70B, most → Owl), then the exhaustive
+  // safety net so it never errors while any provider is up. An explicit "second opinion" routes to a
   // strong, different reviewer first. Only configured providers appear in the chain.
-  const kind = input.adjustments.secondOpinion ? "second_opinion" : "synthesis";
-  const chain = chainFor(kind);
+  const chain = input.adjustments.secondOpinion ? chainFor("second_opinion") : chainFor("synthesis", SERVICES[input.service].model);
   let lastError: unknown = null;
 
   // Owner-only instrumentation (no content stored).
@@ -174,13 +174,10 @@ export async function runTask(input: RunInput, demo: boolean): Promise<RunResult
       lastError = new ProviderError("The model did not return a usable result.", 502, true);
     } catch (err) {
       lastError = err;
-      // Only a bad/again-missing API key (auth) or user cancellation is fatal — abort then.
-      // Everything else (model-not-found, bad request, rate limit, 5xx, timeout) falls through
-      // to the next model in the chain, because one flaky model shouldn't kill the whole task.
-      if (err instanceof ProviderError && (err.status === 401 || err.status === 403)) {
-        recordCall({ taskType: input.service, model, calls, success: false, rateLimited: false, errorStatus: err.status, tokens: tokens || undefined });
-        throw err;
-      }
+      // Only user cancellation is fatal. EVERYTHING else — including auth (401/403) — falls through
+      // to the next model. With multiple providers, a bad/missing key for ONE provider (e.g. a
+      // typo'd GROQ_API_KEY) must not kill a task that Owl or Gemini could complete. The next model
+      // in the chain is on a different provider with a different key.
       if (input.signal?.aborted) throw err;
       // Otherwise continue to the next approved free model (bounded by the chain length).
     }

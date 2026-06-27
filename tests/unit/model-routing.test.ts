@@ -5,37 +5,23 @@ import { modelEnabled } from "@/lib/ai/providers";
 // to control which providers are "enabled" and assert chainFor's ordering + filtering directly.
 vi.mock("@/lib/ai/providers", () => ({ modelEnabled: vi.fn(() => true) }));
 
-import { MODELS, EXTRA_MODELS, routeModel, fallbackChain, chainFor, isFreeModel, assertFreeModel, type TaskKind } from "@/lib/ai/model-router";
+import { MODELS, EXTRA_MODELS, chainFor, isFreeModel, assertFreeModel, type TaskKind } from "@/lib/ai/model-router";
 import { getCapabilities, __resetCapabilityCache } from "@/lib/ai/provider-capabilities";
 
 const enabled = vi.mocked(modelEnabled);
-const ALL_KINDS: TaskKind[] = ["synthesis", "rewrite", "classify", "title", "autocomplete", "second_opinion"];
+const LEAN_KINDS: TaskKind[] = ["autocomplete", "title", "classify"];
+const EXHAUSTIVE_KINDS: TaskKind[] = ["synthesis", "rewrite", "second_opinion"];
+const ALL_KINDS: TaskKind[] = [...LEAN_KINDS, ...EXHAUSTIVE_KINDS];
 
 beforeEach(() => {
   enabled.mockReset();
   enabled.mockReturnValue(true); // every provider configured, by default
 });
 
-describe("model routing", () => {
-  it("uses the fast model only for trivial kinds", () => {
-    expect(routeModel("primary", "autocomplete")).toBe(MODELS.fast);
-    expect(routeModel("primary", "title")).toBe(MODELS.fast);
-    expect(routeModel("primary", "classify")).toBe(MODELS.fast);
-    expect(routeModel("primary", "rewrite")).toBe(MODELS.fast);
-  });
-  it("routes ALL synthesis to Owl Alpha by default, regardless of service preference", () => {
-    expect(routeModel("primary", "synthesis")).toBe(MODELS.primary);
-    expect(routeModel("reviewer", "synthesis")).toBe(MODELS.primary);
-    expect(routeModel("fast", "synthesis")).toBe(MODELS.primary);
-  });
-  it("routes an explicit second opinion to the reviewer model", () => {
-    expect(routeModel("primary", "second_opinion")).toBe(MODELS.reviewer);
-  });
+describe("money safety", () => {
   it("never uses paid models or auto (free-tier models only)", () => {
     const ids = [...Object.values(MODELS), ...Object.values(EXTRA_MODELS)];
     expect(ids).not.toContain("openrouter/auto");
-    // Accept: `:free` OpenRouter models, the free owl-alpha stealth model, Mistral's free-tier
-    // model, and the tagged free-provider models (Groq/Cerebras/Google) using `provider::model`.
     const knownFree = new Set<string>(["openrouter/owl-alpha", "mistral-small-latest"]);
     expect(ids.every((m) => m.includes(":free") || m.includes("::") || knownFree.has(m))).toBe(true);
   });
@@ -45,66 +31,94 @@ describe("model routing", () => {
       expect(() => assertFreeModel(m)).not.toThrow();
     }
     expect(isFreeModel("openai/gpt-4o")).toBe(false);
-    expect(isFreeModel("anthropic/claude-3.5-sonnet")).toBe(false);
-    expect(() => assertFreeModel("openai/gpt-4o")).toThrow(/non-free/);
-    // a `:free` variant is accepted defensively
+    expect(() => assertFreeModel("anthropic/claude-3.5-sonnet")).toThrow(/non-free/);
     expect(isFreeModel("deepseek/deepseek-r1:free")).toBe(true);
   });
-  it("includes Laguna in the map but never auto-uses it (disabled by default)", () => {
-    expect(MODELS.restricted).toBe("poolside/laguna-m.1:free");
-    expect(fallbackChain(MODELS.primary)).not.toContain(MODELS.restricted);
-    expect(fallbackChain(MODELS.reviewer)).not.toContain(MODELS.restricted);
-    for (const kind of ALL_KINDS) expect(chainFor(kind)).not.toContain(MODELS.restricted);
-  });
-  it("degrades Owl -> GPT-OSS -> Nemotron for resilience (Nemotron last, never first)", () => {
-    const chain = fallbackChain(MODELS.primary);
-    expect(chain[0]).toBe(MODELS.primary);
-    expect(chain[1]).toBe(MODELS.fast);
-    expect(chain[chain.length - 1]).toBe(MODELS.reviewer); // last resort only
-    expect(new Set(chain).size).toBe(chain.length);
-  });
-});
-
-describe("task-aware chains (chainFor)", () => {
-  it("orders each kind by its best-fit model first", () => {
-    // Autocomplete/trivial = latency first → Cerebras/Groq small models lead.
-    expect(chainFor("autocomplete")[0]).toBe(EXTRA_MODELS.cerebras8b);
-    expect(chainFor("title")[0]).toBe(EXTRA_MODELS.groq8b);
-    expect(chainFor("classify")[0]).toBe(EXTRA_MODELS.groq8b);
-    // Rewrite = quick but quality matters → a fast 70B leads.
-    expect(chainFor("rewrite")[0]).toBe(EXTRA_MODELS.groq70b);
-    // Synthesis = quality first → Owl leads, Gemini (huge context) is the first cross-provider fallback.
-    expect(chainFor("synthesis")[0]).toBe(MODELS.primary);
-    expect(chainFor("synthesis")[1]).toBe(EXTRA_MODELS.gemini);
-    // Second opinion = a strong, different reviewer leads.
-    expect(chainFor("second_opinion")[0]).toBe(MODELS.reviewer);
-  });
-  it("only ever yields free models, deduplicated", () => {
+  it("every chain only ever yields free models, deduplicated, in every config", () => {
     for (const kind of ALL_KINDS) {
-      const chain = chainFor(kind);
-      expect(chain.length).toBeGreaterThan(0);
+      for (const m of chainFor(kind)) expect(isFreeModel(m)).toBe(true);
+    }
+    // Including each synthesis strength.
+    for (const pref of ["primary", "reviewer", "fast"] as const) {
+      const chain = chainFor("synthesis", pref);
       expect(new Set(chain).size).toBe(chain.length);
       for (const m of chain) expect(isFreeModel(m)).toBe(true);
     }
   });
-  it("drops models whose provider has no key (only OpenRouter configured)", () => {
-    // Disable every tagged provider + Mistral; keep OpenRouter native ids.
-    enabled.mockImplementation((m: string) => !m.includes("::") && !m.startsWith("mistral"));
-    expect(chainFor("autocomplete")).toEqual([MODELS.fast, MODELS.primary]);
-    expect(chainFor("synthesis")).toEqual([MODELS.primary, MODELS.fast, MODELS.reviewer]);
-    expect(chainFor("rewrite")).toEqual([MODELS.fast, MODELS.primary]);
+  it("Laguna is in the map but never auto-used in any chain", () => {
+    expect(MODELS.restricted).toBe("poolside/laguna-m.1:free");
+    for (const kind of ALL_KINDS) expect(chainFor(kind)).not.toContain(MODELS.restricted);
+    for (const pref of ["primary", "reviewer", "fast"] as const) expect(chainFor("synthesis", pref)).not.toContain(MODELS.restricted);
   });
-  it("includes the extra providers ahead of OpenRouter when their keys are present", () => {
-    // Only Groq + OpenRouter enabled (no Cerebras/Google/Mistral).
+});
+
+describe("routing each model to its strength (chainFor)", () => {
+  it("leads latency-sensitive work with the fastest providers", () => {
+    expect(chainFor("autocomplete")[0]).toBe(EXTRA_MODELS.cerebras8b);
+    expect(chainFor("title")[0]).toBe(EXTRA_MODELS.groq8b);
+    expect(chainFor("classify")[0]).toBe(EXTRA_MODELS.groq8b);
+    expect(chainFor("rewrite")[0]).toBe(EXTRA_MODELS.groq70b);
+  });
+  it("leads synthesis by the service's declared strength", () => {
+    // Default / most services → Owl, with Gemini (huge context) as the first cross-provider fallback.
+    expect(chainFor("synthesis")[0]).toBe(MODELS.primary);
+    expect(chainFor("synthesis")[1]).toBe(EXTRA_MODELS.gemini);
+    expect(chainFor("synthesis", "primary")[0]).toBe(MODELS.primary);
+    // Reasoning/adversarial (Challenge) → Nemotron leads, Owl right behind.
+    expect(chainFor("synthesis", "reviewer")[0]).toBe(MODELS.reviewer);
+    expect(chainFor("synthesis", "reviewer")[1]).toBe(MODELS.primary);
+    // Light structuring (Notes) → fastest capable model leads, Owl as the quality backstop.
+    expect(chainFor("synthesis", "fast")[0]).toBe(EXTRA_MODELS.groq70b);
+    expect(chainFor("synthesis", "fast")).toContain(MODELS.primary);
+  });
+  it("routes an explicit second opinion to a strong, different reviewer", () => {
+    expect(chainFor("second_opinion")[0]).toBe(MODELS.reviewer);
+  });
+});
+
+describe("always-a-fallback (no errors)", () => {
+  it("quality kinds include EVERY configured model (exhaustive safety net)", () => {
+    const all = new Set([...Object.values(MODELS).filter((m) => m !== MODELS.restricted), ...Object.values(EXTRA_MODELS)]);
+    for (const kind of EXHAUSTIVE_KINDS) {
+      const chain = new Set(chainFor(kind));
+      for (const m of all) expect(chain.has(m)).toBe(true); // nothing free is left out as a last resort
+    }
+    // The tiny 8B models are present but last (never the lead for a quality task).
+    const syn = chainFor("synthesis");
+    expect(syn).toContain(EXTRA_MODELS.groq8b);
+    expect(syn.indexOf(EXTRA_MODELS.groq8b)).toBeGreaterThan(syn.indexOf(MODELS.primary));
+  });
+  it("lean kinds stay lean — no heavy reviewer/mistral tail (best-effort, silent on failure)", () => {
+    for (const kind of LEAN_KINDS) {
+      const chain = chainFor(kind);
+      expect(chain).not.toContain(MODELS.reviewer);
+      expect(chain).not.toContain(MODELS.mistral);
+    }
+  });
+  it("degrades cleanly to OpenRouter-only (the common deploy)", () => {
+    enabled.mockImplementation((m: string) => !m.includes("::") && !m.startsWith("mistral"));
+    expect(chainFor("synthesis")).toEqual([MODELS.primary, MODELS.fast, MODELS.reviewer]);
+    expect(chainFor("synthesis", "reviewer")).toEqual([MODELS.reviewer, MODELS.primary, MODELS.fast]);
+    expect(chainFor("synthesis", "fast")).toEqual([MODELS.fast, MODELS.primary, MODELS.reviewer]);
+    expect(chainFor("rewrite")).toEqual([MODELS.fast, MODELS.primary, MODELS.reviewer]);
+    expect(chainFor("autocomplete")).toEqual([MODELS.fast, MODELS.primary]);
+  });
+  it("works even with a single non-OpenRouter provider (e.g. Groq only)", () => {
+    enabled.mockImplementation((m: string) => m.startsWith("groq::"));
+    expect(chainFor("synthesis")).toEqual([EXTRA_MODELS.groq70b, EXTRA_MODELS.groq8b]);
+    expect(chainFor("autocomplete")[0]).toBe(EXTRA_MODELS.groq8b);
+    for (const kind of ALL_KINDS) expect(chainFor(kind).length).toBeGreaterThan(0);
+  });
+  it("prefers extra providers ahead of OpenRouter when their keys are present", () => {
     enabled.mockImplementation((m: string) => m.startsWith("groq::") || (!m.includes("::") && !m.startsWith("mistral")));
     const chain = chainFor("rewrite");
-    expect(chain[0]).toBe(EXTRA_MODELS.groq70b); // Groq leads
+    expect(chain[0]).toBe(EXTRA_MODELS.groq70b);
     expect(chain).toContain(MODELS.fast); // OpenRouter free still present as a fallback
     expect(chain).not.toContain(EXTRA_MODELS.cerebras70b); // Cerebras disabled
   });
-  it("returns an empty chain when no provider key is configured", () => {
+  it("returns an empty chain only when NO provider is configured", () => {
     enabled.mockReturnValue(false);
-    expect(chainFor("synthesis")).toEqual([]);
+    for (const kind of ALL_KINDS) expect(chainFor(kind)).toEqual([]);
   });
 });
 

@@ -84,10 +84,10 @@ export async function POST(req: NextRequest) {
             controller.close();
             return;
           }
-          // Mid-stream failure (some text already sent) or a bad key: stop, don't restart.
+          // Mid-stream failure (some text already sent): can't cleanly switch models, so stop.
           if (emitted) break;
-          if (err instanceof ProviderError && (err.status === 401 || err.status === 403)) break;
-          // Otherwise fall through to the next free model in the chain.
+          // Otherwise fall through to the next free model in the chain — including on auth errors,
+          // since the next model is a different provider with a different key.
         }
       }
 

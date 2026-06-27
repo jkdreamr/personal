@@ -43,9 +43,16 @@ export const serverEnv = {
   forceDemo: bool(process.env.NEXT_PUBLIC_DEMO_MODE, false),
 } as const;
 
-/** True when Harbor should run without calling external models. */
+/** True when at least one model provider key is configured. */
+export function anyProviderConfigured(): boolean {
+  return Boolean(
+    serverEnv.openRouterKey || serverEnv.groqKey || serverEnv.cerebrasKey || serverEnv.geminiKey || serverEnv.mistralKey
+  );
+}
+
+/** True when Harbor should run without calling external models (no key on ANY provider). */
 export function isDemoMode(): boolean {
-  return serverEnv.forceDemo || serverEnv.openRouterKey.length === 0;
+  return serverEnv.forceDemo || !anyProviderConfigured();
 }
 
 /**
@@ -73,8 +80,10 @@ export function validateServerEnv(): { ok: boolean; errors: string[]; warnings: 
     }
   }
 
-  if (!serverEnv.openRouterKey && !serverEnv.forceDemo) {
-    warnings.push("OPENROUTER_API_KEY is not set — Harbor is running in demo mode.");
+  if (!anyProviderConfigured() && !serverEnv.forceDemo) {
+    warnings.push("No model provider key is set (OpenRouter/Groq/Cerebras/Gemini/Mistral) — Harbor is running in demo mode.");
+  } else if (!serverEnv.openRouterKey && anyProviderConfigured()) {
+    warnings.push("OPENROUTER_API_KEY is not set — running on the other provider(s) only; model capability detection (JSON mode) falls back to the safe default.");
   }
 
   return { ok: errors.length === 0, errors, warnings };
