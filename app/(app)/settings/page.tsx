@@ -21,12 +21,14 @@ import { useToast } from "@/components/ui/toast";
 
 type Health = { demo: boolean; gateEnabled: boolean; dailyBudget: number; searchProvider: string; search: string };
 
-const SEARCH_LABEL: Record<string, string> = {
-  none: "off",
-  wikipedia: "Wikipedia (key-less). Add a Brave key for full web results.",
-  brave: "Brave (full web)",
-  duckduckgo: "DuckDuckGo (often blocked from servers)",
-};
+function searchLabel(name: string): string {
+  if (!name || name === "none") return "off";
+  if (name.includes("searxng")) return "SearXNG — unlimited, full web";
+  if (name.includes("brave")) return "Brave — full web (free tier, ~2k/month)";
+  if (name.includes("duckduckgo")) return "DuckDuckGo (often blocked from servers)";
+  if (name.includes("wikipedia")) return "Wikipedia — key-less. Set SEARXNG_URL for unlimited full-web search.";
+  return name;
+}
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -77,7 +79,7 @@ export default function SettingsPage() {
           </div>
           {health && (
             <p className="mt-3 border-t border-line pt-3 text-meta text-muted">
-              Web search: <span className="text-ink">{SEARCH_LABEL[health.search] ?? health.search}</span>
+              Web search: <span className="text-ink">{searchLabel(health.search)}</span>
             </p>
           )}
           {remaining !== null && (

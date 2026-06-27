@@ -64,8 +64,9 @@ Add a key to enable full drafting, research, and web retrieval.
 | `MAX_FILE_SIZE_MB` | no (default `10`) | |
 | `MAX_ATTACHMENTS_PER_TASK` | no (default `6`) | |
 | `MAX_URL_PAGES` | no (default `12`) | Max pages crawled per company site. |
-| `SEARCH_PROVIDER` | no (default `auto`) | Web search for research services. `auto` = Brave if a key is set, else key-less Wikipedia. Also `none`, `wikipedia`, `brave`. |
-| `BRAVE_SEARCH_API_KEY` | no | Free Brave Search key → full-web results (recommended for niche questions). Without it, Wikipedia search is used. |
+| `SEARCH_PROVIDER` | no (default `auto`) | `auto` tries SearXNG → Brave → Wikipedia. Also `none`, `wikipedia`, `brave`, `searxng`. |
+| `SEARXNG_URL` | no | A SearXNG instance you control → **unlimited, $0, full-web search** (see below). |
+| `BRAVE_SEARCH_API_KEY` | no | Free Brave key → full web, but the free tier is capped (~2k/month). |
 
 Only `NEXT_PUBLIC_*` values reach the browser. `OPENROUTER_API_KEY` never does.
 
@@ -143,5 +144,24 @@ mode the editor streams a locally-built draft + heuristic ghost, so it's fully t
 
 Harbor must never incur per-token cost. All models are zero-priced on OpenRouter (`owl-alpha` is a
 free stealth model; the others are `:free` variants), and a hard guard (`assertFreeModel`) refuses to
-call anything else. Web search uses key-less **Wikipedia** by default, or **Brave**'s free tier if you
-add `BRAVE_SEARCH_API_KEY`. No paid APIs, databases, search, or analytics anywhere.
+call anything else. No paid APIs, databases, search, or analytics anywhere.
+
+## Unlimited, $0 web search (SearXNG)
+
+There is no key-less, *unlimited*, full-web search API that works from a server (Google/Bing/DuckDuckGo
+block datacenter IPs; Brave/Tavily/Serper cap their free tiers). The one solution that is genuinely
+**free and uncapped** is **SearXNG** — open-source metasearch you run yourself. Harbor integrates with
+it directly:
+
+1. Run SearXNG (free, ~1 command), enabling the JSON format:
+   ```bash
+   docker run -d --name searxng -p 8080:8080 \
+     -e "SEARXNG_SETTINGS__SEARCH__FORMATS=[html,json]" searxng/searxng
+   ```
+   Host it anywhere always-on and free (a free VPS, Fly.io, Render, an Oracle Cloud free VM, etc.).
+2. Set `SEARXNG_URL` to its public URL in Vercel and redeploy.
+
+Now Research / Verify / Challenge / Brief / Meeting get **unlimited full-web results at $0**, with no
+per-query cost and no monthly cap. Without it, Harbor falls back to key-less **Wikipedia** (works out
+of the box, but encyclopedic only) or **Brave**'s free tier if `BRAVE_SEARCH_API_KEY` is set. The
+search layer is an ordered composite (`SearXNG → Brave → Wikipedia`) so it always returns something.

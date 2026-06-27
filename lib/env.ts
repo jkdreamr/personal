@@ -29,6 +29,8 @@ export const serverEnv = {
   searchProvider: process.env.SEARCH_PROVIDER?.trim() || "auto",
   // Optional free Brave Search API key for full-web results.
   braveSearchKey: process.env.BRAVE_SEARCH_API_KEY?.trim() || "",
+  // Optional self-hosted/owned SearXNG instance → UNLIMITED, $0, full-web search.
+  searxngUrl: process.env.SEARXNG_URL?.trim() || "",
   // Owner-only diagnostics. When empty, /diagnostics is disabled entirely.
   diagnosticsToken: process.env.DIAGNOSTICS_TOKEN?.trim() || "",
   // Demo mode is on when explicitly requested OR when no key is configured.
