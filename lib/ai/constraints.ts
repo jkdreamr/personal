@@ -1,8 +1,11 @@
 /**
- * Length & format constraint detection. When a user states how long the output should be — "300
- * words", "in 3 paragraphs", "two sentences", "5 bullet points", "a one-pager", "under 280
- * characters", "8–10 slides" — Harbor must obey it exactly, not the coarse Short/Balanced/Thorough
- * hint. This parses those constraints out of free text so the prompt can state them forcefully.
+ * Output-requirement detection. When a user states how the result should be shaped — length ("300
+ * words", "3 paragraphs", "two sentences", "5 bullets", "8–10 slides", "under 280 characters", "a
+ * one-pager"), structure ("as a table", "in prose", "no headings", "TL;DR"), language ("in Spanish",
+ * "translate to French"), reading level ("plain English", "ELI5"), or point of view — Harbor must
+ * obey it exactly, not its own defaults. This parses those out of the user's request (and short
+ * pasted context) so the prompt can state them forcefully and they override conflicting defaults.
+ * `outputRequirements()` is the single entry point the prompts use.
  */
 
 export type LengthUnit = "words" | "sentences" | "paragraphs" | "bullets" | "slides" | "characters" | "pages" | "lines";
@@ -104,23 +107,124 @@ function phrase(c: LengthConstraint): string {
   }
 }
 
-/**
- * A forceful, unambiguous instruction stating the detected length requirements — meant to OVERRIDE
- * the coarse length hint. Returns "" when no explicit constraint is present (so the normal length
- * guidance applies).
- */
-export function lengthInstruction(...texts: (string | undefined)[]): string {
-  const constraints = parseLengthConstraints(texts.filter(Boolean).join("\n"));
-  if (!constraints.length) return "";
-  const units = Array.from(new Set(constraints.map((c) => c.unit))).join(" and ");
-  return (
-    `LENGTH REQUIREMENT — this is a hard constraint from the user and OVERRIDES any other length guidance. ` +
-    `The output must be ${constraints.map(phrase).join("; ")}. ` +
-    `Plan the structure to fit, then count the ${units} and revise until it fits precisely before you finish.`
-  );
-}
-
 /** True when the text contains any explicit length/format constraint. */
 export function hasLengthConstraint(...texts: (string | undefined)[]): boolean {
   return parseLengthConstraints(texts.filter(Boolean).join("\n")).length > 0;
+}
+
+// ---------------------------------------------------------------------------
+// Beyond length: structure, language, reading level, and point of view. These
+// are things models commonly default-override (their own headings/bullets, English,
+// jargon), so when a user states one we surface it as a hard, overriding instruction.
+// Regexes are written to require an explicit cue ("in prose", "as a table", "in Spanish")
+// so incidental phrasing ("the conference table", "the Spanish market") does not trigger.
+// ---------------------------------------------------------------------------
+
+export type FormatDirective = "bullets" | "numbered" | "table" | "prose" | "no-headings" | "tldr" | "qa" | "checklist" | "no-emojis";
+
+const FORMAT_INSTRUCTION: Record<FormatDirective, string> = {
+  prose: "Write in flowing prose paragraphs — do NOT use bullet points or lists.",
+  bullets: "Format the main content as a bulleted list.",
+  numbered: "Format the main content as a numbered, step-by-step list.",
+  table: "Present the information as a table.",
+  "no-headings": "Do not use section headings.",
+  tldr: "Open with a one-line bottom-line summary before any detail.",
+  qa: "Use a question-and-answer format.",
+  checklist: "Format as an actionable checklist.",
+  "no-emojis": "Do not use any emojis.",
+};
+
+export function parseFormatDirectives(text: string): FormatDirective[] {
+  const t = (text || "").toLowerCase();
+  const found = new Set<FormatDirective>();
+  // "prose" / "no bullets" wins over "bullets" if both somehow appear.
+  if (/\b(in|as)\s+prose\b|\bprose only\b|\bparagraphs?\s+only\b|\b(no|without|don'?t use|do not use|avoid)\s+(bullets?|bullet points?|lists?)\b/.test(t)) found.add("prose");
+  if (!found.has("prose") && /\bbullet points?\b|\bbulleted list\b|\bas bullets\b|\bin bullets\b|\bbullet form\b/.test(t)) found.add("bullets");
+  if (/\bnumbered (list|steps)\b|\bas steps\b|\bstep[\s-]by[\s-]step\b/.test(t)) found.add("numbered");
+  if (/\b(as a|in a|as|in)\s+table\b|\btable\s+(format|form)\b|\bcomparison table\b/.test(t)) found.add("table");
+  if (/\b(no|without|don'?t use|do not use)\s+headings?\b/.test(t)) found.add("no-headings");
+  if (/\btl;?dr\b|\bbluf\b|\bbottom[\s-]line[\s-]up[\s-]front\b|\bsummary (at|on)(\s+the)?\s+top\b|\blead with (the )?(conclusion|bottom line|recommendation)\b/.test(t)) found.add("tldr");
+  if (/\bq\s*&\s*a\b|\bquestions? and answers?\b/.test(t)) found.add("qa");
+  if (/\bchecklist\b/.test(t)) found.add("checklist");
+  if (/\b(no|without|don'?t use|do not use)\s+emojis?\b/.test(t)) found.add("no-emojis");
+  return [...found];
+}
+
+const LANGUAGES = [
+  "English", "Spanish", "French", "German", "Italian", "Portuguese", "Dutch", "Russian", "Mandarin", "Chinese",
+  "Cantonese", "Japanese", "Korean", "Arabic", "Hindi", "Bengali", "Punjabi", "Tamil", "Telugu", "Hebrew",
+  "Turkish", "Polish", "Swedish", "Norwegian", "Danish", "Finnish", "Greek", "Czech", "Romanian", "Hungarian",
+  "Thai", "Vietnamese", "Indonesian", "Malay", "Tagalog", "Filipino", "Ukrainian", "Urdu", "Persian", "Farsi",
+  "Swahili", "Catalan",
+];
+
+/** Detect a requested OUTPUT language. Requires a writing cue or a clause-final "in <Language>". */
+export function parseLanguage(text: string): string | null {
+  for (const lang of LANGUAGES) {
+    const patterns = [
+      new RegExp(`\\b(?:write|written|respond|reply|translate|draft|answer|compose|summari[sz]e|explain|describe|render|output|put it|provide it)\\b[^.?!\\n]*?\\bin\\s+${lang}\\b`, "i"),
+      new RegExp(`\\btranslate(?:d)?\\b[^.?!\\n]*?\\b(?:in)?to\\s+${lang}\\b`, "i"),
+      new RegExp(`\\bin\\s+${lang}\\b\\s*(?:[.,;!?)]|$|only|please|throughout)`, "i"),
+      new RegExp(`\\b${lang}\\s+(?:version|translation)\\b`, "i"),
+    ];
+    if (patterns.some((re) => re.test(text))) {
+      return lang === "Farsi" ? "Persian" : lang === "Filipino" ? "Tagalog" : lang;
+    }
+  }
+  return null;
+}
+
+/** Detect a request for plain / simple language (reading level). */
+export function parseReadingLevel(text: string): string | null {
+  const re =
+    /\bplain english\b|\bsimple (?:language|terms|words|english)\b|\blay(?:man|men|person)'?s?\s+terms\b|\beli5\b|\bexplain like i'?m (?:5|five)\b|\bfor a \d+[\s-]year[\s-]old\b|\bfor a \d+(?:st|nd|rd|th)[\s-]grader?\b|\bnon[\s-]technical\b|\bjargon[\s-]free\b|\bno jargon\b|\beasy to (?:understand|read|follow)\b/i;
+  return re.test(text || "") ? "Use plain, simple language a non-expert can follow; avoid jargon and define any necessary terms." : null;
+}
+
+/** Detect first/second/third-person point of view. Requires an "in … person" cue or the hyphenated
+ *  form ("third-person"), so an incidental "the third person to arrive" doesn't trigger. */
+export function parsePerson(text: string): string | null {
+  const m = (text || "").match(/\bin (?:the )?(first|second|third)\s+person\b|\b(first|second|third)-person\b/i);
+  if (!m) return null;
+  const p = (m[1] || m[2]).toLowerCase();
+  return `Write in the ${p} person.`;
+}
+
+/**
+ * The unified, forceful "output requirements" block built from everything the user explicitly asked
+ * for — length, structure, language, reading level, point of view. Returns "" when nothing explicit
+ * is present (so normal defaults apply). This is what the prompts inject.
+ */
+export function outputRequirements(...texts: (string | undefined)[]): string {
+  const text = texts.filter(Boolean).join("\n");
+  if (!text.trim()) return "";
+  const reqs: string[] = [];
+
+  const len = parseLengthConstraints(text);
+  if (len.length) reqs.push(`Length — it must be ${len.map(phrase).join("; ")}. Count and revise until it fits exactly before finishing.`);
+  for (const f of parseFormatDirectives(text)) reqs.push(FORMAT_INSTRUCTION[f]);
+  const lang = parseLanguage(text);
+  if (lang) reqs.push(`Write the ENTIRE output (including any headings) in ${lang}.`);
+  const rl = parseReadingLevel(text);
+  if (rl) reqs.push(rl);
+  const pov = parsePerson(text);
+  if (pov) reqs.push(pov);
+
+  if (!reqs.length) return "";
+  return `OUTPUT REQUIREMENTS — explicit user instructions that OVERRIDE any default style, length, or structure. Obey every one exactly:\n- ${reqs.join("\n- ")}`;
+}
+
+/** True when the text contains ANY explicit output requirement (length, format, language, …). */
+export function hasOutputRequirements(...texts: (string | undefined)[]): boolean {
+  return outputRequirements(...texts).length > 0;
+}
+
+/**
+ * Returns the text only when it is short enough to be a typed instruction rather than a source
+ * document. Use this to scan pasted CONTEXT for requirements ("make this 300 words") without
+ * mis-reading numbers inside a long article/PDF the user pasted as material.
+ */
+export function shortContext(text?: string, max = 600): string | undefined {
+  const t = text?.trim();
+  return t && t.length > 0 && t.length <= max ? t : undefined;
 }

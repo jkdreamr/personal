@@ -1,5 +1,5 @@
 import type { ChatMessage } from "./openrouter-client";
-import { hasLengthConstraint, lengthInstruction } from "./constraints";
+import { hasLengthConstraint, outputRequirements, shortContext } from "./constraints";
 
 /**
  * Prompts for the live writing studio. Output is PLAIN markdown prose only — never JSON,
@@ -22,8 +22,8 @@ function styleLine(tone?: string, length?: string, ...from: (string | undefined)
   if (tone) bits.push(`tone: ${tone}`);
   if (length && !explicit) bits.push(`length: ${length}`); // explicit count wins over the coarse hint
   const style = bits.length ? `Style — ${bits.join(", ")}.` : "";
-  const req = lengthInstruction(...from);
-  return [style, req].filter(Boolean).join(" ");
+  const req = outputRequirements(...from); // length + format + language + reading level + POV
+  return [style, req].filter(Boolean).join("\n\n");
 }
 
 export function buildComposeMessages(opts: {
@@ -41,14 +41,14 @@ export function buildComposeMessages(opts: {
 
   if (mode === "continue") {
     return [
-      { role: "system", content: `${SAFETY} Continue the user's draft naturally from where it stops. Match their voice and register. Write 1–3 sentences (a short paragraph at most). Output only the continuation text — it will be appended directly after their cursor. ${styleLine(tone, length, goal)}` },
+      { role: "system", content: `${SAFETY} Continue the user's draft naturally from where it stops. Match their voice and register. Write 1–3 sentences (a short paragraph at most). Output only the continuation text — it will be appended directly after their cursor. ${styleLine(tone, length, goal, shortContext(context))}` },
       { role: "user", content: [goal ? `Goal: ${goal}` : "", ctx, `DRAFT SO FAR:\n${(currentText ?? "").slice(-2000)}`].filter(Boolean).join("\n\n") },
     ];
   }
 
   if (mode === "improve") {
     return [
-      { role: "system", content: `${SAFETY} Rewrite the SELECTED passage per the instruction. Preserve the meaning and the surrounding voice. Output only the rewritten passage — it replaces the selection exactly. ${styleLine(tone, length, instruction, goal)}` },
+      { role: "system", content: `${SAFETY} Rewrite the SELECTED passage per the instruction. Preserve the meaning and the surrounding voice. Output only the rewritten passage — it replaces the selection exactly. ${styleLine(tone, length, instruction, goal, shortContext(context))}` },
       {
         role: "user",
         content: [
@@ -67,7 +67,7 @@ export function buildComposeMessages(opts: {
   return [
     {
       role: "system",
-      content: `${SAFETY} Write a complete, ready-to-edit draft from the user's request and material. Start from their actual viewpoint and the specifics provided. Use concrete facts; preserve uncertainty; end with a clear next step where it fits. Use light markdown (paragraphs, short headings only if genuinely helpful, "- " bullets). ${styleLine(tone, length, goal, currentText)}`,
+      content: `${SAFETY} Write a complete, ready-to-edit draft from the user's request and material. Start from their actual viewpoint and the specifics provided. Use concrete facts; preserve uncertainty; end with a clear next step where it fits. Use light markdown (paragraphs, short headings only if genuinely helpful, "- " bullets). ${styleLine(tone, length, goal, shortContext(currentText, 800), shortContext(context))}`,
     },
     {
       role: "user",

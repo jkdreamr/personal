@@ -2,7 +2,7 @@ import type { ServiceId, ServiceConfig } from "@/lib/services";
 import { SERVICES } from "@/lib/services";
 import type { Adjustments, Attachment, Source, VoiceProfile } from "@/lib/types";
 import type { ChatMessage } from "./openrouter-client";
-import { hasLengthConstraint, lengthInstruction } from "./constraints";
+import { hasLengthConstraint, outputRequirements, shortContext } from "./constraints";
 
 /**
  * Prompt construction. Two hard rules are baked into every system prompt:
@@ -119,11 +119,18 @@ export function buildContext(opts: {
 
   blocks.push(`TASK: ${goal || "(no sentence provided — infer a sensible default and state it as an assumption)"}`);
 
-  // Honor explicit length/format requests ("300 words", "3 paragraphs", "5 bullets", "8–10 slides")
-  // exactly — stated forcefully and right after the task so it can't be missed.
-  const explicitLength = hasLengthConstraint(goal, adjustments.instruction);
-  const lenReq = lengthInstruction(goal, adjustments.instruction);
-  if (lenReq) blocks.push(lenReq);
+  // Honor explicit output requirements the user typed in the task ("what to write") OR in short
+  // pasted context — length, structure (bullets/table/prose), language, reading level, point of view.
+  // Stated forcefully right after the task. Only short pasted text is scanned, so numbers inside a
+  // long source document the user attached are never mistaken for a request.
+  const reqSources: (string | undefined)[] = [
+    goal,
+    adjustments.instruction,
+    ...attachments.filter((a) => a.kind === "text").map((a) => shortContext(a.text)),
+  ];
+  const explicitLength = hasLengthConstraint(...reqSources);
+  const reqs = outputRequirements(...reqSources);
+  if (reqs) blocks.push(reqs);
 
   const adj = adjustmentBlock(adjustments, explicitLength);
   if (adj) blocks.push(adj);
