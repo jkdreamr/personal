@@ -34,8 +34,10 @@ test.describe("Intelligence + Create services (demo mode)", () => {
     await page.goto("/challenge");
     await page.getByRole("textbox").first().fill("Pressure-test this thesis: the market will double next year and we will capture half of it.");
     await page.getByRole("button", { name: "Find risks" }).click();
+    await expect(page.locator("article.print-document")).toBeVisible();
 
-    await expect(page.getByText("Claim checks")).toBeVisible();
+    // Evidence is collapsed by default — open the summary, then check the labels.
+    await page.getByRole("button", { name: /Based on/ }).click();
     // At least one classification label is shown (color is never the only signal).
     await expect(
       page.getByText(/Unresolved question|Reported claim|Opinion|Not sufficiently supported/).filter({ visible: true }).first()
@@ -47,7 +49,10 @@ test.describe("Intelligence + Create services (demo mode)", () => {
     await page.getByRole("textbox").first().fill("Understand this company from the notes.");
     await pasteText(page, "Acme builds data-migration tooling for mid-market software teams. Founded 2019.");
     await page.getByRole("button", { name: "Research" }).click();
+    await expect(page.locator("article.print-document")).toBeVisible();
 
+    // Open the collapsed evidence summary, then confirm a user-provided source is shown.
+    await page.getByRole("button", { name: /Based on/ }).click();
     await expect(page.getByText("You provided this").filter({ visible: true }).first()).toBeVisible();
   });
 

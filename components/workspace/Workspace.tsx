@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, RotateCcw, Ban, Cloud } from "lucide-react";
+import { ArrowRight, RotateCcw, Cloud } from "lucide-react";
 import type { ServiceId } from "@/lib/services";
 import { SERVICES } from "@/lib/services";
 import { useTask } from "@/hooks/useTask";
@@ -10,7 +10,7 @@ import { duplicateTask } from "@/lib/db/tasks";
 import { relativeTime } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/field";
-import { Skeleton } from "@/components/ui/primitives";
+import { Skeleton, Spinner } from "@/components/ui/primitives";
 import { Segmented } from "@/components/ui/segmented";
 import { useToast } from "@/components/ui/toast";
 import { ServiceIcon } from "@/components/ui/icon";
@@ -18,7 +18,6 @@ import { AttachmentAdder } from "./AttachmentAdder";
 import { ContextPanel } from "./ContextPanel";
 import { ArtifactBody } from "./ArtifactBody";
 import { SourcesPanel } from "./SourcesPanel";
-import { StageRail } from "./StageRail";
 import { Toolbar } from "./Toolbar";
 
 type MobilePane = "context" | "work" | "sources";
@@ -82,8 +81,8 @@ export function Workspace({ serviceId, taskId, autorun }: { serviceId: ServiceId
           </span>
           <span className="text-sm font-medium text-muted">{service.label}</span>
         </div>
-        <h1 className="mt-5 font-display text-3xl font-semibold leading-tight text-ink sm:text-4xl">{service.hero.heading}</h1>
-        {service.hero.helper && <p className="mt-2 text-lead text-ink/70">{service.hero.helper}</p>}
+        <h1 className="mt-5 text-2xl font-semibold leading-tight text-ink sm:text-[1.75rem]">{service.hero.heading}</h1>
+        {service.hero.helper && <p className="mt-2 text-base text-ink/65">{service.hero.helper}</p>}
 
         <div className="mt-6">
           <Textarea
@@ -196,6 +195,7 @@ export function Workspace({ serviceId, taskId, autorun }: { serviceId: ServiceId
             onAdjust={(a) => update({ adjustments: a })}
             onRefine={(instr) => refine(instr)}
             onApplyAdjustments={() => run()}
+            onSecondOpinion={() => run({ adjustments: { ...task.adjustments, secondOpinion: true } })}
           />
         </div>
 
@@ -203,16 +203,18 @@ export function Workspace({ serviceId, taskId, autorun }: { serviceId: ServiceId
         <div className={`${pane === "work" ? "block" : "hidden"} min-w-0 px-4 py-5 sm:px-8 lg:block`}>
           <div className="mx-auto max-w-prose">
             {running && (
-              <div className="space-y-4">
-                <StageRail stages={stages} />
-                <div className="flex items-center gap-2">
-                  <Button variant="secondary" size="sm" onClick={cancel}>
-                    <Ban className="h-4 w-4" /> Cancel
-                  </Button>
-                  <span className="text-sm text-muted">You can keep working — Harbor will let you know when it&apos;s ready.</span>
+              <div className="space-y-5">
+                <div className="flex items-center gap-3">
+                  <Spinner />
+                  <span className="text-sm text-ink/80" aria-live="polite">
+                    {stages.find((s) => s.state === "active")?.label ?? "Working"}…
+                  </span>
+                  <button onClick={cancel} className="ml-auto text-meta text-muted underline underline-offset-2 hover:text-ink">
+                    Cancel
+                  </button>
                 </div>
                 {!task.artifact && (
-                  <div className="space-y-3 pt-2">
+                  <div className="space-y-3">
                     <Skeleton className="h-7 w-2/3" />
                     <Skeleton className="h-4 w-full" />
                     <Skeleton className="h-4 w-11/12" />

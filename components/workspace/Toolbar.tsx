@@ -114,33 +114,25 @@ export function Toolbar({
         </PopoverContent>
       </Popover>
 
-      {/* Desktop: Print + Duplicate + New visible. Mobile: in overflow. */}
-      <div className="hidden items-center gap-1.5 sm:flex">
-        <Button variant="ghost" size="sm" onClick={() => window.print()} aria-label="Print">
-          <Printer className="h-4 w-4" />
-        </Button>
-        <Button variant="ghost" size="sm" onClick={onDuplicate}>
-          <Files className="h-4 w-4" /> Duplicate
-        </Button>
-        <Button variant="ghost" size="sm" onClick={() => router.push(`/${service}`)}>
-          <Plus className="h-4 w-4" /> New
-        </Button>
-      </div>
-
-      <div className="sm:hidden">
-        <Popover open={moreOpen} onOpenChange={setMoreOpen}>
-          <PopoverTrigger asChild>
-            <Button variant="ghost" size="sm" aria-label="More actions">
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent>
-            <MenuItem onClick={() => { window.print(); setMoreOpen(false); }}>Print / Save as PDF</MenuItem>
-            <MenuItem onClick={() => { onDuplicate(); setMoreOpen(false); }}>Duplicate</MenuItem>
-            <MenuItem onClick={() => { router.push(`/${service}`); setMoreOpen(false); }}>Start new</MenuItem>
-          </PopoverContent>
-        </Popover>
-      </div>
+      {/* Less-used actions live in one quiet overflow on every screen size. */}
+      <Popover open={moreOpen} onOpenChange={setMoreOpen}>
+        <PopoverTrigger asChild>
+          <Button variant="ghost" size="sm" aria-label="More actions">
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent>
+          <MenuItem onClick={() => { window.print(); setMoreOpen(false); }}>
+            <span className="inline-flex items-center gap-2"><Printer className="h-4 w-4" /> Print / Save as PDF</span>
+          </MenuItem>
+          <MenuItem onClick={() => { onDuplicate(); setMoreOpen(false); }}>
+            <span className="inline-flex items-center gap-2"><Files className="h-4 w-4" /> Duplicate</span>
+          </MenuItem>
+          <MenuItem onClick={() => { router.push(`/${service}`); setMoreOpen(false); }}>
+            <span className="inline-flex items-center gap-2"><Plus className="h-4 w-4" /> Start new</span>
+          </MenuItem>
+        </PopoverContent>
+      </Popover>
 
       {/* Privacy */}
       <Popover>

@@ -39,11 +39,9 @@ export function Divider({ className }: { className?: string }) {
   return <hr className={cn("border-0 border-t border-line", className)} />;
 }
 
-/** Small section eyebrow label used across panels. */
+/** Small section label used across panels. Sentence case, quiet — not an all-caps eyebrow. */
 export function Eyebrow({ children, className }: { children: React.ReactNode; className?: string }) {
-  return (
-    <p className={cn("text-meta font-semibold uppercase tracking-wide text-muted", className)}>{children}</p>
-  );
+  return <p className={cn("text-meta font-medium text-muted", className)}>{children}</p>;
 }
 
 export function Spinner({ className }: { className?: string }) {

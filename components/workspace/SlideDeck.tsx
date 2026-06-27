@@ -29,7 +29,7 @@ function SlideCanvas({ slide, index, total, present }: { slide: Slide; index: nu
       )}
     >
       <div className="flex items-center justify-between">
-        <span className={cn("text-meta uppercase tracking-wide text-muted", present && "text-[1.6vmin]")}>
+        <span className={cn("text-meta text-muted", present && "text-[1.6vmin]")}>
           {LAYOUT_LABEL[slide.layout] ?? slide.layout}
         </span>
         <span className={cn("text-meta text-muted tnum", present && "text-[1.6vmin]")}>

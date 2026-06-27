@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ExternalLink, HelpCircle, ListTodo } from "lucide-react";
+import { ChevronDown, ExternalLink, HelpCircle, ListTodo } from "lucide-react";
 import type { Artifact, Claim, Source } from "@/lib/types";
 import { CLAIM_LABELS } from "@/lib/research/citation-builder";
 import { TRUST_TIER_LABELS } from "@/lib/research/trust-tier";
@@ -44,12 +44,7 @@ function SourceSheet({ source, open, onOpenChange }: { source: Source | null; op
                 <div className="flex items-start gap-2">
                   <dt className="w-20 shrink-0 text-muted">Link</dt>
                   <dd className="min-w-0 break-all">
-                    <a
-                      href={source.canonicalUrl}
-                      target="_blank"
-                      rel="noopener noreferrer nofollow"
-                      className="inline-flex items-center gap-1 text-ink underline underline-offset-2"
-                    >
+                    <a href={source.canonicalUrl} target="_blank" rel="noopener noreferrer nofollow" className="inline-flex items-center gap-1 text-ink underline underline-offset-2">
                       {source.canonicalUrl}
                       <ExternalLink className="h-3 w-3 shrink-0" />
                     </a>
@@ -80,7 +75,7 @@ function SourceSheet({ source, open, onOpenChange }: { source: Source | null; op
   );
 }
 
-export function ClaimCard({ claim, sources, onOpenSource }: { claim: Claim; sources: Source[]; onOpenSource: (s: Source) => void }) {
+function ClaimCard({ claim, sources, onOpenSource }: { claim: Claim; sources: Source[]; onOpenSource: (s: Source) => void }) {
   const cited = sources.filter((s) => claim.sourceIds.includes(s.id));
   return (
     <li className="rounded-card border border-line bg-canvas p-3">
@@ -90,9 +85,7 @@ export function ClaimCard({ claim, sources, onOpenSource }: { claim: Claim; sour
       </div>
       <p className="mt-2 text-sm text-ink">{claim.text}</p>
       {claim.supportingExcerpts.length > 0 && (
-        <blockquote className="mt-2 border-l-2 border-line pl-2.5 text-meta text-ink/70">
-          {claim.supportingExcerpts[0]}
-        </blockquote>
+        <blockquote className="mt-2 border-l-2 border-line pl-2.5 text-meta text-ink/70">{claim.supportingExcerpts[0]}</blockquote>
       )}
       {cited.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1.5">
@@ -105,9 +98,12 @@ export function ClaimCard({ claim, sources, onOpenSource }: { claim: Claim; sour
   );
 }
 
+const TO_CONFIRM: Claim["classification"][] = ["unresolved_question", "not_sufficiently_supported"];
+
 export function SourcesPanel({ artifact, coverage }: { artifact: Artifact | undefined; coverage?: string | null }) {
   const [openSource, setOpenSource] = React.useState<Source | null>(null);
   const [sheetOpen, setSheetOpen] = React.useState(false);
+  const [expanded, setExpanded] = React.useState(false);
 
   const sources = artifact?.sources ?? [];
   const claims = artifact?.claims ?? [];
@@ -116,28 +112,83 @@ export function SourcesPanel({ artifact, coverage }: { artifact: Artifact | unde
     setSheetOpen(true);
   };
 
-  const hasAnything =
-    sources.length > 0 ||
-    claims.length > 0 ||
-    (artifact?.openQuestions?.length ?? 0) > 0 ||
-    (artifact?.nextActions?.length ?? 0) > 0;
+  const hasEvidence = sources.length > 0 || claims.length > 0;
+  const toConfirm = claims.filter((c) => TO_CONFIRM.includes(c.classification)).length;
+  const hasAnything = hasEvidence || (artifact?.openQuestions?.length ?? 0) > 0 || (artifact?.nextActions?.length ?? 0) > 0;
 
   if (!hasAnything) {
-    return (
-      <div className="text-sm text-muted">
-        Sources, claim checks, and next steps will appear here once Harbor has a result.
-      </div>
-    );
+    return <div className="text-sm text-muted">Sources and next steps appear here once Harbor has a result.</div>;
   }
+
+  const summaryBits: string[] = [];
+  if (sources.length) summaryBits.push(`${sources.length} source${sources.length === 1 ? "" : "s"}`);
+  if (toConfirm) summaryBits.push(`${toConfirm} to confirm`);
+  const summary = summaryBits.length ? `Based on ${summaryBits.join(" · ")}` : "Evidence";
 
   return (
     <div className="space-y-6">
-      {claims.length > 0 && (
+      {hasEvidence && (
         <section>
-          <Eyebrow>Claim checks</Eyebrow>
-          <ul className="mt-2 space-y-2">
-            {claims.map((c) => (
-              <ClaimCard key={c.id} claim={c} sources={sources} onOpenSource={open} />
+          {/* Compact, collapsed-by-default evidence summary. */}
+          <button
+            onClick={() => setExpanded((e) => !e)}
+            aria-expanded={expanded}
+            className="flex w-full items-center gap-2 rounded-btn border border-line bg-surface/60 px-3 py-2 text-left text-sm text-ink hover:bg-ink/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/70"
+          >
+            <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted transition-transform", expanded && "rotate-180")} />
+            <span className="flex-1">{summary}</span>
+            <span className="text-meta text-muted">{expanded ? "Hide" : "Show"}</span>
+          </button>
+
+          {expanded && (
+            <div className="mt-3 space-y-4">
+              {claims.length > 0 && (
+                <ul className="space-y-2">
+                  {claims.map((c) => (
+                    <ClaimCard key={c.id} claim={c} sources={sources} onOpenSource={open} />
+                  ))}
+                </ul>
+              )}
+              {sources.length > 0 && (
+                <div>
+                  <Eyebrow>Sources</Eyebrow>
+                  <ul className="mt-2 space-y-1.5">
+                    {sources.map((s) => (
+                      <li key={s.id}>
+                        <button
+                          onClick={() => open(s)}
+                          className="group flex w-full items-start gap-2 rounded-btn px-1.5 py-1.5 text-left hover:bg-ink/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/70"
+                        >
+                          <span className="mt-0.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-muted" />
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm text-ink">{s.title}</span>
+                            <span className="block text-meta text-muted">{TRUST_TIER_LABELS[s.trustTier]}</span>
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {coverage && <p className="text-meta text-muted">{coverage}</p>}
+            </div>
+          )}
+        </section>
+      )}
+
+      {(artifact?.nextActions?.length ?? 0) > 0 && (
+        <section>
+          <Eyebrow>
+            <span className="inline-flex items-center gap-1.5">
+              <ListTodo className="h-3.5 w-3.5" /> Next steps
+            </span>
+          </Eyebrow>
+          <ul className="mt-2 space-y-1.5 text-sm text-ink/85">
+            {artifact!.nextActions!.map((a, i) => (
+              <li key={i} className="flex gap-2">
+                <span className="text-muted">·</span>
+                <span>{a}</span>
+              </li>
             ))}
           </ul>
         </section>
@@ -161,50 +212,7 @@ export function SourcesPanel({ artifact, coverage }: { artifact: Artifact | unde
         </section>
       )}
 
-      {(artifact?.nextActions?.length ?? 0) > 0 && (
-        <section>
-          <Eyebrow>
-            <span className="inline-flex items-center gap-1.5">
-              <ListTodo className="h-3.5 w-3.5" /> Next steps
-            </span>
-          </Eyebrow>
-          <ul className="mt-2 space-y-1.5 text-sm text-ink/85">
-            {artifact!.nextActions!.map((a, i) => (
-              <li key={i} className="flex gap-2">
-                <span className="text-muted">·</span>
-                <span>{a}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {sources.length > 0 && (
-        <section>
-          <Eyebrow>Sources</Eyebrow>
-          <ul className="mt-2 space-y-1.5">
-            {sources.map((s) => (
-              <li key={s.id}>
-                <button
-                  onClick={() => open(s)}
-                  className="group flex w-full items-start gap-2 rounded-btn px-1.5 py-1.5 text-left hover:bg-ink/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/70"
-                >
-                  <span className="mt-0.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-muted" />
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm text-ink">{s.title}</span>
-                    <span className="block text-meta text-muted">{TRUST_TIER_LABELS[s.trustTier]}</span>
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-          {coverage && <p className="mt-3 text-meta text-muted">{coverage}</p>}
-        </section>
-      )}
-
       <SourceSheet source={openSource} open={sheetOpen} onOpenChange={setSheetOpen} />
     </div>
   );
 }
-
-export { CLAIM_TONE };

@@ -24,6 +24,8 @@ export const serverEnv = {
   maxAttachmentsPerTask: num(process.env.MAX_ATTACHMENTS_PER_TASK, 6),
   maxUrlPages: num(process.env.MAX_URL_PAGES, 12),
   searchProvider: process.env.SEARCH_PROVIDER?.trim() || "none",
+  // Owner-only diagnostics. When empty, /diagnostics is disabled entirely.
+  diagnosticsToken: process.env.DIAGNOSTICS_TOKEN?.trim() || "",
   // Demo mode is on when explicitly requested OR when no key is configured.
   forceDemo: bool(process.env.NEXT_PUBLIC_DEMO_MODE, false),
 } as const;

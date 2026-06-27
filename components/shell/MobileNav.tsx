@@ -54,7 +54,7 @@ export function MobileNav() {
           <div className="mt-3 max-h-[60vh] space-y-4 overflow-y-auto pb-2">
             {SERVICE_GROUPS.map((g) => (
               <div key={g.id}>
-                <p className="pb-1.5 text-meta font-semibold uppercase tracking-wide text-muted">{g.label}</p>
+                <p className="pb-1.5 text-meta font-semibold text-muted">{g.label}</p>
                 <div className="grid grid-cols-2 gap-2">
                   {servicesByGroup(g.id).map((s) => (
                     <Link

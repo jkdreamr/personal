@@ -32,13 +32,15 @@ the test suite (0 serious/critical violations). Never use `muted-soft` for text.
 
 ## Typography
 
-- **Body / UI**: Hanken Grotesk (humanist grotesque — warm, legible, trustworthy; not Inter).
-- **Display (rare, large only)**: Newsreader (editorial serif) for the home hero and large slide
-  statements. Never serif for body copy or small text.
+- **One neutral system stack** for everything: `"Helvetica Neue", Helvetica, Arial, sans-serif`.
+  No Google fonts, no editorial serif, no trendy startup face. Reasoning: familiar, highly legible
+  for older readers, renders instantly (no font fetch / layout shift), and reads as a serious private
+  tool rather than an "AI product". Hierarchy comes from size, weight, spacing, and layout — not the
+  typeface. (`font-display` is aliased to the same stack, so it is never a real display font.)
+- Sentence case everywhere — navigation, buttons, labels, section headings. No all-caps eyebrows.
 - Base body 16px (mobile too), line-height 1.5–1.65, measure 60–75ch for long text.
-- Scale (px): 13 (metadata), 15 (secondary), 16 (body), 18 (lead), 22, 28, 36, 48, 64 (display).
-- Weights: 400 body, 500 labels/nav, 600 headings, 700 reserved for display.
-- Tabular figures for any numeric/budget/date column.
+- Restrained sizes: page/hero headings ≤ ~28px (`text-2xl`/`1.75rem`); no oversized hero text for drama.
+- Weights: 400 body, 500 labels/nav, 600 headings. Tabular figures for any numeric/budget/date column.
 
 ## Spacing & layout
 

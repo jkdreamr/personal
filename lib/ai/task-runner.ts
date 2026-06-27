@@ -8,6 +8,7 @@ import { safeParseModelJson } from "./fallback";
 import { fallbackChain, MODELS, routeModel, type ModelId } from "./model-router";
 import { buildMessages } from "./prompts";
 import { getCapabilities } from "./provider-capabilities";
+import { recordCall } from "./instrumentation";
 import { modelArtifactSchema, type ModelArtifact } from "./schemas/artifact";
 
 export type RunInput = {
@@ -79,27 +80,33 @@ export function normalizeArtifact(raw: ModelArtifact, service: ServiceId, provid
 const REPAIR_INSTRUCTION =
   "Your previous reply was not valid JSON in the required shape. Reply again with ONE valid JSON object only, matching the schema. No prose, no code fences.";
 
+type Meter = { onCall: () => void; onUsage: (n: number) => void };
+
 /** Try one model: call, parse, validate. Returns null if it produced unusable output. */
-async function tryModel(model: ModelId, messages: ChatMessage[], signal?: AbortSignal): Promise<ModelArtifact | null> {
+async function tryModel(model: ModelId, messages: ChatMessage[], meter: Meter, signal?: AbortSignal): Promise<ModelArtifact | null> {
   const caps = await getCapabilities(model, signal);
+  meter.onCall();
   const first = await chatComplete({
     model,
     messages,
     jsonMode: caps.jsonMode,
     temperature: 0.4,
     signal,
+    onUsage: meter.onUsage,
   });
   let parsed = safeParseModelJson(first);
   let result = modelArtifactSchema.safeParse(parsed);
   if (result.success) return result.data;
 
   // One repair retry, same model, asking for valid JSON. (Single retry only — no loops.)
+  meter.onCall();
   const repaired = await chatComplete({
     model,
     messages: [...messages, { role: "assistant", content: first.slice(0, 4000) }, { role: "user", content: REPAIR_INSTRUCTION }],
     jsonMode: caps.jsonMode,
     temperature: 0.2,
     signal,
+    onUsage: meter.onUsage,
   });
   parsed = safeParseModelJson(repaired);
   result = modelArtifactSchema.safeParse(parsed);
@@ -125,7 +132,8 @@ export async function runTask(input: RunInput, demo: boolean): Promise<RunResult
   }
 
   const service = SERVICES[input.service];
-  const preferred = routeModel(service.model, "synthesis");
+  // Owl Alpha by default; only an explicit "second opinion" routes to the reviewer model.
+  const preferred = routeModel(service.model, input.adjustments.secondOpinion ? "second_opinion" : "synthesis");
   const messages = buildMessages({
     serviceId: input.service,
     goal: input.goal,
@@ -138,10 +146,16 @@ export async function runTask(input: RunInput, demo: boolean): Promise<RunResult
   const chain = fallbackChain(preferred);
   let lastError: unknown = null;
 
+  // Owner-only instrumentation (no content stored).
+  let calls = 0;
+  let tokens = 0;
+  const meter: Meter = { onCall: () => (calls += 1), onUsage: (n) => (tokens += n) };
+
   for (const model of chain) {
     try {
-      const raw = await tryModel(model, messages, input.signal);
+      const raw = await tryModel(model, messages, meter, input.signal);
       if (raw) {
+        recordCall({ taskType: input.service, model, calls, success: true, rateLimited: false, tokens: tokens || undefined });
         return { artifact: normalizeArtifact(raw, input.service, input.sources), modelUsed: model };
       }
       // Parsed but invalid — move to next model in the chain.
@@ -149,12 +163,25 @@ export async function runTask(input: RunInput, demo: boolean): Promise<RunResult
     } catch (err) {
       lastError = err;
       // Non-retryable (e.g. auth) or user cancellation: stop immediately.
-      if (err instanceof ProviderError && !err.retryable) throw err;
+      if (err instanceof ProviderError && !err.retryable) {
+        recordCall({ taskType: input.service, model, calls, success: false, rateLimited: false, errorStatus: err.status, tokens: tokens || undefined });
+        throw err;
+      }
       if (input.signal?.aborted) throw err;
       // Otherwise continue to the next approved free model (bounded by the chain length).
     }
   }
 
+  const rateLimited = lastError instanceof ProviderError && lastError.status === 429;
+  recordCall({
+    taskType: input.service,
+    model: preferred,
+    calls,
+    success: false,
+    rateLimited,
+    errorStatus: lastError instanceof ProviderError ? lastError.status : undefined,
+    tokens: tokens || undefined,
+  });
   throw lastError instanceof Error ? lastError : new ProviderError("The model is temporarily unavailable.", 503, true);
 }
 

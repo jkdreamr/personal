@@ -82,12 +82,12 @@ export function HomeIntake() {
   };
 
   return (
-    <div className="rounded-card border border-line bg-canvas p-5 shadow-card sm:p-6">
+    <div className="rounded-card border border-line bg-canvas p-4 sm:p-5">
       <Textarea
         ref={textareaRef}
         aria-label="What are you working on?"
-        className="min-h-[96px] border-0 bg-transparent px-0 text-lead focus-visible:ring-0"
-        placeholder="Say what you need in one sentence — e.g. “Draft a follow-up email from this thread.”"
+        className="min-h-[88px] border-0 bg-transparent px-0 text-base focus-visible:ring-0"
+        placeholder="Paste, upload, or add a link — and say what you need in a sentence."
         value={goal}
         onChange={(e) => {
           setGoal(e.target.value);

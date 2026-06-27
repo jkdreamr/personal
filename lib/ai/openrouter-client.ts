@@ -21,6 +21,8 @@ export type ChatRequest = {
   jsonMode?: boolean;
   signal?: AbortSignal;
   timeoutMs?: number;
+  /** Reports approximate token usage when the provider includes it. */
+  onUsage?: (totalTokens: number) => void;
 };
 
 export class ProviderError extends Error {
@@ -99,7 +101,11 @@ export async function chatComplete(req: ChatRequest): Promise<string> {
 
   const data = (await res.json()) as {
     choices?: { message?: { content?: string } }[];
+    usage?: { total_tokens?: number };
   };
+  if (req.onUsage && typeof data.usage?.total_tokens === "number") {
+    req.onUsage(data.usage.total_tokens);
+  }
   const content = data?.choices?.[0]?.message?.content;
   if (!content || typeof content !== "string") {
     throw new ProviderError("The model returned an empty response.", 502, true);

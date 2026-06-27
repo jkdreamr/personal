@@ -118,6 +118,7 @@ export function ContextPanel({
   onAdjust,
   onRefine,
   onApplyAdjustments,
+  onSecondOpinion,
 }: {
   service: ServiceConfig;
   goal: string;
@@ -131,9 +132,11 @@ export function ContextPanel({
   onAdjust: (a: Adjustments) => void;
   onRefine: (instruction: string) => void;
   onApplyAdjustments: () => void;
+  onSecondOpinion?: () => void;
 }) {
   const [adjustOpen, setAdjustOpen] = React.useState(false);
   const quickRefinements = service.refinements.slice(0, 3);
+  const offersSecondOpinion = service.capabilities.producesClaims || service.id === "decide";
 
   const setAdj = (patch: Partial<Adjustments>) => onAdjust({ ...adjustments, ...patch });
 
@@ -207,6 +210,16 @@ export function ContextPanel({
               </button>
             ))}
           </div>
+
+          {offersSecondOpinion && onSecondOpinion && (
+            <button
+              onClick={onSecondOpinion}
+              disabled={running}
+              className="mt-2 block w-full rounded-chip border border-line bg-surface px-2.5 py-1.5 text-left text-meta font-medium text-ink hover:bg-ink/[0.05] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/70"
+            >
+              Get a second opinion (deeper review)
+            </button>
+          )}
 
           <button
             onClick={() => setAdjustOpen((o) => !o)}

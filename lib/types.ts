@@ -144,6 +144,8 @@ export type Adjustments = {
   /** Compare/Decide criteria. */
   criteria?: string;
   useVoiceProfile?: boolean;
+  /** Explicit, user-requested adversarial review (routes to the reviewer model). */
+  secondOpinion?: boolean;
 };
 
 export type StageId =

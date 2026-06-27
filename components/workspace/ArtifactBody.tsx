@@ -83,7 +83,7 @@ export function ArtifactBody({
           </div>
           {artifact.email.subjectOptions.length > 0 && (
             <div className="mt-3">
-              <p className="text-meta uppercase tracking-wide text-muted">Subject options</p>
+              <p className="text-meta text-muted">Subject options</p>
               <ul className="mt-1.5 space-y-1">
                 {artifact.email.subjectOptions.map((s, i) => (
                   <li key={i} className="flex items-center justify-between gap-2 text-sm">
@@ -104,7 +104,7 @@ export function ArtifactBody({
             </div>
           )}
           <div className="mt-3">
-            <p className="text-meta uppercase tracking-wide text-muted">Body</p>
+            <p className="text-meta text-muted">Body</p>
             <SafeMarkdown text={artifact.email.body} className="prose-harbor mt-1.5 whitespace-pre-wrap" />
           </div>
         </section>

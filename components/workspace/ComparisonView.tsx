@@ -44,7 +44,7 @@ export function ComparisonView({ table }: { table: ComparisonTable }) {
             <dl className="mt-2 space-y-1.5">
               {table.criteria.map((row, ri) => (
                 <div key={ri} className="text-sm">
-                  <dt className="text-meta uppercase tracking-wide text-muted">{row.label}</dt>
+                  <dt className="text-meta text-muted">{row.label}</dt>
                   <dd className="text-ink/85">{row.values[oi] || "—"}</dd>
                 </div>
               ))}
