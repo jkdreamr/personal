@@ -1,30 +1,11 @@
-import { serverEnv } from "@/lib/env";
 import { assertFreeModel } from "./model-router";
+import { endpointFor } from "./providers";
 
 /**
  * Minimal multi-provider chat-completions client. Server-side only; keys never leave the server.
- * Both OpenRouter and Mistral expose the same OpenAI-compatible path, so we just pick the right
- * endpoint, key, and headers per model. Mistral (id `mistral-*`) is an optional free fallback.
+ * Provider routing (OpenRouter / Mistral / Groq / Cerebras / Google) lives in providers.ts — each
+ * exposes the same OpenAI-compatible path, so we just swap the URL, key, headers, and model name.
  */
-
-const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const MISTRAL_URL = "https://api.mistral.ai/v1/chat/completions";
-
-function isMistralModel(model: string): boolean {
-  return model.startsWith("mistral-") || model.startsWith("open-mistral") || model.startsWith("open-mixtral");
-}
-
-/** Resolve the endpoint URL, key, and provider-specific headers for a model. */
-function endpointFor(model: string): { url: string; key: string; headers: Record<string, string> } {
-  if (isMistralModel(model)) {
-    return { url: MISTRAL_URL, key: serverEnv.mistralKey, headers: {} };
-  }
-  return {
-    url: OPENROUTER_URL,
-    key: serverEnv.openRouterKey,
-    headers: { "HTTP-Referer": "https://harbor.app", "X-Title": "Harbor" },
-  };
-}
 
 export type ChatMessage = {
   role: "system" | "user" | "assistant";
@@ -79,7 +60,7 @@ export async function chatComplete(req: ChatRequest): Promise<string> {
   }
 
   const body: Record<string, unknown> = {
-    model: req.model,
+    model: endpoint.model,
     messages: req.messages,
     temperature: req.temperature ?? 0.4,
     max_tokens: req.maxTokens ?? 2400,
@@ -161,7 +142,7 @@ export async function chatCompleteStream(req: ChatRequest, onDelta: (text: strin
         ...endpoint.headers,
       },
       body: JSON.stringify({
-        model: req.model,
+        model: endpoint.model,
         messages: req.messages,
         temperature: req.temperature ?? 0.4,
         max_tokens: req.maxTokens ?? 2400,

@@ -16,9 +16,12 @@ function bool(value: string | undefined, fallback: boolean): boolean {
 
 export const serverEnv = {
   openRouterKey: process.env.OPENROUTER_API_KEY?.trim() || "",
-  // Optional cross-provider last-resort fallback (Mistral free "Experiment" tier — $0, separate
-  // rate-limit pool from OpenRouter). Only used when all OpenRouter free models fail.
+  // Optional extra free providers (separate rate-limit pools). All have free tiers at $0.
+  // Harbor routes each task to the best-suited available model and falls through the rest.
   mistralKey: process.env.MISTRAL_API_KEY?.trim() || "",
+  groqKey: process.env.GROQ_API_KEY?.trim() || "", // very fast (LPU) — great for autocomplete
+  cerebrasKey: process.env.CEREBRAS_API_KEY?.trim() || "", // fastest inference
+  geminiKey: process.env.GEMINI_API_KEY?.trim() || "", // Gemini 2.0 Flash — strong, 1M context
   betaAccessCode: process.env.BETA_ACCESS_CODE?.trim() || "",
   betaSessionSecret: process.env.BETA_SESSION_SECRET?.trim() || "",
   betaGateEnabled: bool(process.env.BETA_GATE_ENABLED, true),

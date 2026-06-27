@@ -86,7 +86,9 @@ First-time E2E: `npm run test:e2e:install` to fetch the Chromium browser.
 
 ## Models
 
-Live mode uses OpenRouter (server-side) with exactly these IDs — no paid models, no `openrouter/auto`:
+Live mode runs entirely on **free** models — no paid models, no `openrouter/auto`. OpenRouter alone
+is enough; adding any of the optional providers (each a free tier with its own rate-limit pool) makes
+Harbor faster and more resilient. Base OpenRouter IDs:
 
 ```
 primary:  openrouter/owl-alpha                       # synthesis, research, long writing
@@ -94,9 +96,25 @@ reviewer: nvidia/nemotron-3-ultra-550b-a55b:free     # Challenge / adversarial r
 fast:     openai/gpt-oss-120b:free                    # rewrites, classification, titles
 ```
 
+Optional extra free providers (tagged `provider::model`, used only when their key is set):
+
+```
+groq::llama-3.3-70b-versatile  groq::llama-3.1-8b-instant   # Groq — extremely fast (autocomplete, rewrites)
+cerebras::llama-3.3-70b        cerebras::llama3.1-8b        # Cerebras — fastest inference
+google::gemini-2.0-flash                                    # Gemini — strong + 1M-token context (long docs)
+mistral-small-latest                                        # Mistral — cross-provider last resort
+```
+
+**Task-aware routing** (`lib/ai/model-router.ts`, `chainFor(kind)`): each kind of work has an ordered
+chain of best-fit models, filtered to whichever providers you've configured, tried in order until one
+succeeds. Latency-sensitive work (autocomplete, titles, classification) leads with Cerebras/Groq;
+quick rewrites lead with a fast 70B; full synthesis leads with Owl, then Gemini (huge context), then a
+fast 70B, then the always-free OpenRouter models, then Mistral; an explicit second opinion leads with a
+strong, *different* reviewer (Nemotron). Provider routing lives in `lib/ai/providers.ts`.
+
 Output is requested as JSON, extracted robustly, validated with Zod, and repaired once on failure.
 Capabilities (e.g. JSON mode) are queried from OpenRouter and cached; when unknown, Harbor assumes
-the safe minimum and relies on prompt-based JSON + validation.
+the safe minimum and relies on prompt-based JSON + validation (works across every provider).
 
 ## Deployment (Vercel)
 
@@ -135,22 +153,27 @@ correct code lets you in), and at least one non-demo route returns a real, sourc
 
 `/write` is a cursor-style writing surface, and the same editor (`components/editor/Composer.tsx`)
 powers the **Edit** mode of every other tool. Anywhere you have a result you can: type freely with
-**ghost-text autocomplete** (Tab accept, Esc dismiss), see **live editorial hints** (local, instant),
+**ghost-text autocomplete** that appears as you write — a short pause surfaces one immediately and a
+~10s heartbeat keeps offering fresh continuations during a long burst (Tab accept, Esc dismiss),
+see **live editorial hints** (local, instant),
 **Continue** from the end, **Improve selection**, and **Regenerate** the whole thing or refine it.
 Generation **streams** token-by-token (`/api/compose`, SSE) so text appears as it's written. In demo
 mode the editor streams a locally-built draft + heuristic ghost, so it's fully testable without a key.
 
 ## Cost — everything is free
 
-Harbor must never incur per-token cost. All models are zero-priced on OpenRouter (`owl-alpha` is a
-free stealth model; the others are `:free` variants), and a hard guard (`assertFreeModel`) refuses to
-call anything else. No paid APIs, databases, search, or analytics anywhere.
+Harbor must never incur per-token cost. Every model it can call is zero-priced — OpenRouter free
+models (`owl-alpha` is a free stealth model; the rest are `:free` variants), plus the free tiers of
+Groq, Cerebras, Google AI Studio (Gemini), and Mistral. A hard guard (`assertFreeModel`, backed by a
+`FREE_ALLOWLIST`) refuses to call anything else. No paid APIs, databases, search, or analytics anywhere.
 
-**Resilient, cross-provider fallback.** Every generation degrades through free models so a single
-flaky one never errors: **Owl → GPT-OSS → Nemotron**, and optionally **→ Mistral** (a *different*
-provider with its own rate-limit pool) when `MISTRAL_API_KEY` is set. Mistral's free "Experiment"
-tier is $0 (no card, rate-limited) — keep your Mistral account on the free tier to stay at $0. This
-applies to both result generation (`/api/task`) and the writing editor (`/api/compose`).
+**Resilient, task-aware, cross-provider fallback.** Every generation degrades through free models so a
+single flaky one never errors. The chain is chosen per task (`chainFor(kind)`) and filtered to the
+providers you've configured — e.g. synthesis is **Owl → Gemini → fast 70B → GPT-OSS → Nemotron →
+Mistral**, autocomplete is **Cerebras → Groq → GPT-OSS**. Each extra provider has its own rate-limit
+pool, so configuring more means more headroom and speed. With only `OPENROUTER_API_KEY` set, Harbor
+still works (it just uses the OpenRouter models). This applies to result generation (`/api/task`), the
+writing editor (`/api/compose`), and inline autocomplete (`/api/autocomplete`).
 
 ## Unlimited, $0 web search (SearXNG)
 

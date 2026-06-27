@@ -70,9 +70,16 @@ export function Composer({
   const autoRan = React.useRef(false);
   const valueRef = React.useRef(value);
   valueRef.current = value;
+  // Mirrors of state read inside the heartbeat interval (avoids stale closures / re-arming it).
+  const ghostRef = React.useRef("");
+  const streamingRef = React.useRef(false);
+  React.useEffect(() => {
+    ghostRef.current = ghost;
+  }, [ghost]);
 
   const setStreamingState = (b: boolean) => {
     setStreaming(b);
+    streamingRef.current = b;
     onStreamingChange?.(b);
   };
 
@@ -92,19 +99,43 @@ export function Composer({
     hintTimer.current = setTimeout(() => setHints(lintText(val)), 400);
   };
 
+  // Fetch a suggestion for the END of `val` (caret must be at the end). Shared by the quick
+  // pause-trigger and the periodic heartbeat below. No-ops while streaming or when text is too short.
+  const requestGhost = React.useCallback(
+    async (val: string) => {
+      const ta = taRef.current;
+      const caretAtEnd = ta ? ta.selectionStart === val.length && ta.selectionEnd === val.length : false;
+      if (!caretAtEnd || streamingRef.current || val.trim().length < 10) return;
+      ghostCtl.current?.abort();
+      const ctl = new AbortController();
+      ghostCtl.current = ctl;
+      const para = val.slice(val.lastIndexOf("\n\n") + 1);
+      const s = await fetchGhost(para, goal, ctl.signal);
+      if (!ctl.signal.aborted && valueRef.current === val && s) {
+        setGhost(s.startsWith(" ") || /[\s([]$/.test(val) ? s : " " + s);
+      }
+    },
+    [goal]
+  );
+
+  // Quick path: a short pause (850ms) after typing shows a suggestion immediately.
   const scheduleGhost = (val: string, caretAtEnd: boolean) => {
     if (ghostTimer.current) clearTimeout(ghostTimer.current);
     ghostCtl.current?.abort();
     setGhost("");
     if (!caretAtEnd || streaming || val.trim().length < 10) return;
-    ghostTimer.current = setTimeout(async () => {
-      const ctl = new AbortController();
-      ghostCtl.current = ctl;
-      const para = val.slice(val.lastIndexOf("\n\n") + 1);
-      const s = await fetchGhost(para, goal, ctl.signal);
-      if (!ctl.signal.aborted && valueRef.current === val && s) setGhost(s.startsWith(" ") || /[\s([]$/.test(val) ? s : " " + s);
-    }, 850);
+    ghostTimer.current = setTimeout(() => requestGhost(val), 850);
   };
+
+  // Heartbeat: even while writing continuously, surface a fresh suggestion roughly every 10s so the
+  // editor proactively offers a "Tab to accept" continuation (cursor-style). Only when one isn't
+  // already showing and the caret sits at the end of the text.
+  React.useEffect(() => {
+    const id = setInterval(() => {
+      if (!ghostRef.current && !streamingRef.current) requestGhost(valueRef.current);
+    }, 10_000);
+    return () => clearInterval(id);
+  }, [requestGhost]);
 
   const handleChange = (val: string) => {
     onChange(val);
@@ -323,7 +354,7 @@ export function Composer({
             {ghost ? (
               <span className="text-meta text-muted">suggestion ready — press Tab to accept</span>
             ) : (
-              value.trim().length >= 10 && <span className="text-meta text-muted">pause to see a suggestion · Tab to accept</span>
+              value.trim().length >= 10 && <span className="text-meta text-muted">suggestions appear as you write · Tab to accept</span>
             )}
           </>
         )}

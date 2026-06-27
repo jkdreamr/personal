@@ -16,8 +16,15 @@ export async function GET() {
       searchProvider: serverEnv.searchProvider,
       // The actual search engine in effect (e.g. "wikipedia", "brave", "none").
       search: getSearchAdapter().name,
-      // Whether the optional cross-provider (Mistral) fallback is configured.
-      mistralFallback: serverEnv.mistralKey.length > 0,
+      // Which optional free providers (separate rate-limit pools) are configured. Each adds a
+      // task-suited model to the routing chain; Harbor still runs on OpenRouter alone.
+      providers: {
+        openrouter: serverEnv.openRouterKey.length > 0,
+        mistral: serverEnv.mistralKey.length > 0,
+        groq: serverEnv.groqKey.length > 0,
+        cerebras: serverEnv.cerebrasKey.length > 0,
+        google: serverEnv.geminiKey.length > 0,
+      },
       envOk: env.ok,
       warnings: env.warnings,
     },

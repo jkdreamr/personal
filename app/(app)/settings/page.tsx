@@ -19,7 +19,8 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
 
-type Health = { demo: boolean; gateEnabled: boolean; dailyBudget: number; searchProvider: string; search: string; mistralFallback: boolean };
+type ProviderFlags = { openrouter: boolean; mistral: boolean; groq: boolean; cerebras: boolean; google: boolean };
+type Health = { demo: boolean; gateEnabled: boolean; dailyBudget: number; searchProvider: string; search: string; providers?: ProviderFlags };
 
 function searchLabel(name: string): string {
   if (!name || name === "none") return "off";
@@ -28,6 +29,17 @@ function searchLabel(name: string): string {
   if (name.includes("duckduckgo")) return "DuckDuckGo (often blocked from servers)";
   if (name.includes("wikipedia")) return "Wikipedia — key-less. Set SEARXNG_URL for unlimited full-web search.";
   return name;
+}
+
+/** A friendly, honest summary of the routing: base OpenRouter models + any extra free providers. */
+function providerSummary(p: ProviderFlags): string {
+  const extras: string[] = [];
+  if (p.groq) extras.push("Groq");
+  if (p.cerebras) extras.push("Cerebras");
+  if (p.google) extras.push("Gemini");
+  if (p.mistral) extras.push("Mistral");
+  const base = "Owl Alpha + free OpenRouter models";
+  return extras.length ? `${base}, plus ${extras.join(", ")} — routed by task, automatic fallback` : `${base} — automatic fallback`;
 }
 
 export default function SettingsPage() {
@@ -82,9 +94,9 @@ export default function SettingsPage() {
               Web search: <span className="text-ink">{searchLabel(health.search)}</span>
             </p>
           )}
-          {health && (
+          {health?.providers && (
             <p className="mt-2 text-meta text-muted">
-              Model fallback: <span className="text-ink">Owl → GPT-OSS → Nemotron{health.mistralFallback ? " → Mistral" : ""}</span>
+              Models: <span className="text-ink">{providerSummary(health.providers)}</span>
             </p>
           )}
           {remaining !== null && (

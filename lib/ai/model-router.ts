@@ -1,4 +1,5 @@
 import type { ModelPreference } from "@/lib/services";
+import { modelEnabled } from "./providers";
 
 /**
  * Model routing. Owl Alpha is Harbor's default for nearly all meaningful work.
@@ -24,12 +25,25 @@ export const MODELS = {
 export type ModelId = (typeof MODELS)[keyof typeof MODELS];
 
 /**
- * Hard money safeguard. Harbor must NEVER incur per-token cost. Only the exact models in MODELS
- * may be called: owl-alpha is a free OpenRouter stealth model; the `:free` variants are zero-priced;
- * `mistral-small-latest` is free on Mistral's Experiment tier (opt-in via MISTRAL_API_KEY). A
- * `:free` suffix is also accepted defensively. Anything else is refused.
+ * Extra free providers (separate rate-limit pools), tagged `provider::model`. All have $0 free
+ * tiers. Only used when their key is configured; Harbor routes each task kind to the best fit.
+ * - Groq / Cerebras: extremely fast inference (great for autocomplete + short tasks).
+ * - Google Gemini 2.0 Flash: strong with a very large context window (great for long research/briefs).
  */
-const FREE_ALLOWLIST: ReadonlySet<string> = new Set<string>(Object.values(MODELS));
+export const EXTRA_MODELS = {
+  groq70b: "groq::llama-3.3-70b-versatile",
+  groq8b: "groq::llama-3.1-8b-instant",
+  cerebras70b: "cerebras::llama-3.3-70b",
+  cerebras8b: "cerebras::llama3.1-8b",
+  gemini: "google::gemini-2.0-flash",
+} as const;
+
+/**
+ * Hard money safeguard. Harbor must NEVER incur per-token cost. Only the exact models below may be
+ * called — OpenRouter free models (owl-alpha + `:free`), Mistral's free Experiment tier, and the
+ * Groq/Cerebras/Google free tiers. A `:free` suffix is also accepted defensively. Anything else is refused.
+ */
+const FREE_ALLOWLIST: ReadonlySet<string> = new Set<string>([...Object.values(MODELS), ...Object.values(EXTRA_MODELS)]);
 
 export function isFreeModel(id: string): boolean {
   return FREE_ALLOWLIST.has(id) || id.endsWith(":free");
@@ -77,4 +91,31 @@ export function fallbackChain(preferred: ModelId): ModelId[] {
     return Array.from(new Set<ModelId>([MODELS.reviewer, MODELS.primary, MODELS.fast]));
   }
   return Array.from(new Set<ModelId>([preferred, MODELS.primary, MODELS.fast, MODELS.reviewer]));
+}
+
+/**
+ * Task-aware routing. Each kind has an ordered candidate list (best fit first) spanning providers;
+ * the chain is filtered to whichever providers are configured and tried in order until one works.
+ * Reasoning behind the ordering:
+ * - autocomplete / title / classify: latency dominates → Cerebras/Groq (fastest) first.
+ * - rewrite: quick but quality matters a little → fast 70Bs, then Gemini, then OpenRouter free.
+ * - synthesis: quality first → Owl (default), then Gemini Flash (strong + huge context for long docs),
+ *   then a fast 70B, then the always-free OpenRouter models, then Mistral.
+ * - second_opinion: a strong, *different* model for an independent take → Nemotron, Gemini, 70B.
+ */
+const CANDIDATES: Record<TaskKind, string[]> = {
+  autocomplete: [EXTRA_MODELS.cerebras8b, EXTRA_MODELS.groq8b, EXTRA_MODELS.groq70b, MODELS.fast, MODELS.primary],
+  title: [EXTRA_MODELS.groq8b, EXTRA_MODELS.cerebras8b, MODELS.fast, MODELS.primary],
+  classify: [EXTRA_MODELS.groq8b, EXTRA_MODELS.cerebras8b, MODELS.fast, MODELS.primary],
+  rewrite: [EXTRA_MODELS.groq70b, EXTRA_MODELS.cerebras70b, EXTRA_MODELS.gemini, MODELS.fast, MODELS.primary],
+  synthesis: [MODELS.primary, EXTRA_MODELS.gemini, EXTRA_MODELS.groq70b, EXTRA_MODELS.cerebras70b, MODELS.fast, MODELS.reviewer, MODELS.mistral],
+  second_opinion: [MODELS.reviewer, EXTRA_MODELS.gemini, EXTRA_MODELS.groq70b, MODELS.primary, MODELS.fast],
+};
+
+/** The ordered list of models to try for a task kind, limited to configured providers. */
+export function chainFor(kind: TaskKind): string[] {
+  const chain = CANDIDATES[kind].filter((m) => modelEnabled(m));
+  // Guarantee a usable OpenRouter free model is present when its key is set.
+  if (modelEnabled(MODELS.fast) && !chain.includes(MODELS.fast)) chain.push(MODELS.fast);
+  return Array.from(new Set(chain));
 }

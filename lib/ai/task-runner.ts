@@ -1,12 +1,11 @@
 import type { ServiceId } from "@/lib/services";
 import { SERVICES } from "@/lib/services";
-import { serverEnv } from "@/lib/env";
 import type { Adjustments, Artifact, Attachment, Claim, Source, VoiceProfile } from "@/lib/types";
 import { uid } from "@/lib/utils";
 import { chatComplete, ProviderError, type ChatMessage } from "./openrouter-client";
 import { generateDemoArtifact } from "./demo";
 import { safeParseModelJson } from "./fallback";
-import { fallbackChain, MODELS, routeModel, type ModelId } from "./model-router";
+import { chainFor, MODELS } from "./model-router";
 import { buildMessages } from "./prompts";
 import { getCapabilities } from "./provider-capabilities";
 import { recordCall } from "./instrumentation";
@@ -24,7 +23,7 @@ export type RunInput = {
 
 export type RunResult = {
   artifact: Artifact;
-  modelUsed: ModelId | "demo";
+  modelUsed: string | "demo";
 };
 
 /**
@@ -95,7 +94,7 @@ const REPAIR_INSTRUCTION =
 type Meter = { onCall: () => void; onUsage: (n: number) => void };
 
 /** Try one model: call, parse, validate. Returns null if it produced unusable output. */
-async function tryModel(model: ModelId, messages: ChatMessage[], meter: Meter, signal?: AbortSignal): Promise<ModelArtifact | null> {
+async function tryModel(model: string, messages: ChatMessage[], meter: Meter, signal?: AbortSignal): Promise<ModelArtifact | null> {
   const caps = await getCapabilities(model, signal);
   meter.onCall();
   const first = await chatComplete({
@@ -143,9 +142,6 @@ export async function runTask(input: RunInput, demo: boolean): Promise<RunResult
     };
   }
 
-  const service = SERVICES[input.service];
-  // Owl Alpha by default; only an explicit "second opinion" routes to the reviewer model.
-  const preferred = routeModel(service.model, input.adjustments.secondOpinion ? "second_opinion" : "synthesis");
   const messages = buildMessages({
     serviceId: input.service,
     goal: input.goal,
@@ -155,8 +151,11 @@ export async function runTask(input: RunInput, demo: boolean): Promise<RunResult
     voiceProfile: input.voiceProfile,
   });
 
-  // Owl -> GPT-OSS -> Nemotron, then optional cross-provider Mistral (free) as a last resort.
-  const chain = [...fallbackChain(preferred), ...(serverEnv.mistralKey ? [MODELS.mistral] : [])];
+  // Task-aware, provider-aware chain. A full service generation is "synthesis" (quality first:
+  // Owl → Gemini → fast 70B → OpenRouter free → Mistral); an explicit second opinion routes to a
+  // strong, different reviewer first. Only configured providers appear in the chain.
+  const kind = input.adjustments.secondOpinion ? "second_opinion" : "synthesis";
+  const chain = chainFor(kind);
   let lastError: unknown = null;
 
   // Owner-only instrumentation (no content stored).
@@ -190,7 +189,7 @@ export async function runTask(input: RunInput, demo: boolean): Promise<RunResult
   const rateLimited = lastError instanceof ProviderError && lastError.status === 429;
   recordCall({
     taskType: input.service,
-    model: preferred,
+    model: chain[0] ?? MODELS.fast,
     calls,
     success: false,
     rateLimited,

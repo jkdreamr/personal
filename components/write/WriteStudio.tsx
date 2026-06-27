@@ -189,7 +189,7 @@ function Studio() {
               </select>
             </div>
           </div>
-          <p className="text-meta text-muted">Type freely — a grey suggestion appears as you pause; press <kbd className="rounded border border-line bg-surface px-1">Tab</kbd> to accept.</p>
+          <p className="text-meta text-muted">Type freely — a grey suggestion appears as you write; press <kbd className="rounded border border-line bg-surface px-1">Tab</kbd> to accept.</p>
         </div>
 
         {/* center: the editor */}

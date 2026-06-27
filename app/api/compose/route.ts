@@ -1,8 +1,8 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { isDemoMode, serverEnv } from "@/lib/env";
+import { isDemoMode } from "@/lib/env";
 import { chatCompleteStream, ProviderError } from "@/lib/ai/openrouter-client";
-import { MODELS, fallbackChain } from "@/lib/ai/model-router";
+import { MODELS, chainFor } from "@/lib/ai/model-router";
 import { recordCall } from "@/lib/ai/instrumentation";
 import { buildComposeMessages } from "@/lib/ai/compose-prompts";
 import { composeDemo } from "@/lib/ai/demo-compose";
@@ -35,10 +35,10 @@ export async function POST(req: NextRequest) {
 
   const demo = isDemoMode();
   const signal = req.signal;
-  // "continue" and short "improve" prefer the fast model for low latency; full "write" prefers
-  // Owl. Each degrades through the free fallback chain so a single flaky model never errors out.
-  const preferred = body.mode === "write" ? MODELS.primary : MODELS.fast;
-  const chain = [...fallbackChain(preferred), ...(serverEnv.mistralKey ? [MODELS.mistral] : [])];
+  // Full "write" is synthesis (quality first: Owl → Gemini → fast 70B → free → Mistral). "continue"
+  // and short "improve" are rewrites that favour the fastest providers (Groq/Cerebras) for low
+  // latency. Each degrades through its provider-aware chain so a single flaky model never errors out.
+  const chain = chainFor(body.mode === "write" ? "synthesis" : "rewrite");
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
 
       recordCall({
         taskType: `compose:${body.mode}`,
-        model: preferred,
+        model: chain[0] ?? MODELS.fast,
         calls: 1,
         success: false,
         rateLimited: lastErr instanceof ProviderError && lastErr.status === 429,

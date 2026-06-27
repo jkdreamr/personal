@@ -1,5 +1,4 @@
 import { serverEnv } from "@/lib/env";
-import type { ModelId } from "./model-router";
 
 /**
  * Provider capability checks. We do NOT assume free models support structured output,
@@ -54,8 +53,13 @@ type ModelRecord = {
   architecture?: { input_modalities?: string[] };
 };
 
-/** Get capabilities for a model, querying + caching as needed. Never throws. */
-export async function getCapabilities(model: ModelId, signal?: AbortSignal): Promise<Capabilities> {
+/**
+ * Get capabilities for a model, querying + caching as needed. Never throws. Accepts any model id
+ * (including tagged `provider::model` ids for Groq/Cerebras/Google) — only OpenRouter ids appear in
+ * the index, so non-OpenRouter models fall back to the safe default (prompt-based JSON), which works
+ * across every provider.
+ */
+export async function getCapabilities(model: string, signal?: AbortSignal): Promise<Capabilities> {
   const cached = cache.get(model);
   if (cached && Date.now() < cached.expires) return cached.value;
 
