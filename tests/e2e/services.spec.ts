@@ -126,3 +126,53 @@ test.describe("Intelligence + Create services (demo mode)", () => {
     await expect(page.getByText(/not legal, medical, tax, or financial advice/i)).toBeVisible();
   });
 });
+
+test.describe("Action + Create services (demo mode)", () => {
+  test("Meeting produces editable prep + an editable follow-up email that persists", async ({ page }) => {
+    await page.goto("/meeting");
+    await page.getByRole("textbox").first().fill("Prepare me for a first call with this company about a partnership.");
+    await page.getByRole("button", { name: "Prepare me" }).click();
+    await expect(page.locator("article.print-document")).toBeVisible();
+
+    // The email is editable in place (spec §8: follow-up drafts).
+    const emailSection = page.locator("section").filter({ has: page.getByRole("heading", { name: "Email" }) });
+    await expect(emailSection).toBeVisible();
+    await emailSection.getByRole("button", { name: "Edit" }).click();
+    const emailBox = page.getByRole("textbox", { name: "Email body" });
+    await emailBox.fill("Hi team,\n\nGREATTOCONNECT — recap and next steps below.\n\nBest,\n");
+    await emailSection.getByRole("button", { name: "Done" }).click();
+    await expect(emailSection.getByText(/GREATTOCONNECT/)).toBeVisible();
+
+    // The edit survives a reload (persisted on the task, not just in the artifact).
+    await page.reload();
+    await expect(page.getByText(/GREATTOCONNECT/)).toBeVisible();
+  });
+
+  test("Decide leads with a structured decision, not a freeform document", async ({ page }) => {
+    await page.goto("/decide");
+    await page.getByRole("textbox").first().fill("Should we hire a senior engineer now or wait one quarter?");
+    await page.getByRole("button", { name: "Help me decide" }).click();
+    await expect(page.locator("article.print-document")).toBeVisible();
+    // The structured scaffold is present by default (not a blank prose doc).
+    await expect(page.getByRole("heading", { name: /Options/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Unknowns/ })).toBeVisible();
+  });
+
+  test("Proposal builds an editable document with a cover email", async ({ page }) => {
+    await page.goto("/proposal");
+    await page.getByRole("textbox").first().fill("A 6-week brand refresh for a mid-market software company.");
+    await page.getByRole("button", { name: "Build proposal" }).click();
+    await expect(page.locator("article.print-document")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Email" })).toBeVisible();
+    // Main document is editable (rich editor), independent of the email.
+    await expect(page.getByRole("button", { name: "Edit" }).first()).toBeVisible();
+  });
+
+  test("Brief produces a skimmable one-pager", async ({ page }) => {
+    await page.goto("/brief");
+    await page.getByRole("textbox").first().fill("Brief my partner on where the Acme deal stands and the open risks.");
+    await page.getByRole("button", { name: "Create brief" }).click();
+    await expect(page.locator("article.print-document")).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Executive summary|Bottom line/ })).toBeVisible();
+  });
+});

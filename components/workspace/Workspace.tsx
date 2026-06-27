@@ -255,8 +255,14 @@ export function Workspace({ serviceId, taskId, autorun }: { serviceId: ServiceId
         {hasArtifact && task.artifact && (
           <Toolbar
             service={serviceId}
-            // Export/copy reflect the user's edited slides when present.
-            artifact={task.slides && task.slides.length ? { ...task.artifact, slides: task.slides } : task.artifact}
+            // Export/copy reflect the user's edited slides and email when present.
+            artifact={{
+              ...task.artifact,
+              ...(task.slides && task.slides.length ? { slides: task.slides } : {}),
+              ...(task.editedEmail != null && task.artifact.email
+                ? { email: { ...task.artifact.email, body: task.editedEmail } }
+                : {}),
+            }}
             editedBody={task.editedBody}
             taskId={task.id}
             onDuplicate={onDuplicate}
@@ -351,6 +357,10 @@ export function Workspace({ serviceId, taskId, autorun }: { serviceId: ServiceId
                 onDoc={(d, md) => update({ doc: d, editedBody: md })}
                 slides={task.slides}
                 onSlides={(s) => update({ slides: s })}
+                editedEmail={task.editedEmail}
+                // Email edits are infrequent and small — persist them immediately so a refresh or
+                // navigation right after editing never drops the last keystrokes.
+                onEmail={(b) => update({ editedEmail: b }, { immediate: true })}
                 editable
                 goal={task.goal}
                 context={task.attachments.map((a) => a.text).filter(Boolean).join("\n\n")}

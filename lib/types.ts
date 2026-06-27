@@ -189,6 +189,9 @@ export type Task = {
   doc?: RichDoc;
   /** Derived markdown projection of `doc` (or a legacy plain edit). Kept for exports/AI context. */
   editedBody?: string;
+  /** User-edited cover/follow-up email body (Proposal, Meeting, Write). Separate so regeneration
+   *  doesn't clobber a refined email; merged into the artifact for copy/export. */
+  editedEmail?: string;
   state: JobState;
   error?: string;
   createdAt: string;

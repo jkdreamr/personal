@@ -104,7 +104,10 @@ export function useTask(serviceId: ServiceId, taskId?: string) {
 
       // Mark running + persist so a refresh shows the saved context. Clear any prior manual
       // edit (rich doc + derived markdown + edited slides) so a regenerate/refine shows fresh output.
-      update({ state: "running", adjustments, doc: undefined, editedBody: undefined, slides: undefined }, { immediate: true });
+      update(
+        { state: "running", adjustments, doc: undefined, editedBody: undefined, slides: undefined, editedEmail: undefined },
+        { immediate: true }
+      );
 
       abortRef.current = runTaskStream(
         {

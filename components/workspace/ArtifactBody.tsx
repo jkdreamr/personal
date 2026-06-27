@@ -6,6 +6,7 @@ import { Info, Pencil, Check } from "lucide-react";
 import type { Artifact, Slide } from "@/lib/types";
 import { Badge } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/field";
 import { SafeMarkdown } from "./SafeMarkdown";
 import { SlideDeck } from "./SlideDeck";
 import { ComparisonView } from "./ComparisonView";
@@ -37,6 +38,8 @@ export function ArtifactBody({
   onDoc,
   slides,
   onSlides,
+  editedEmail,
+  onEmail,
   editable,
   goal,
   context,
@@ -50,14 +53,19 @@ export function ArtifactBody({
   /** User-edited slides (preferred over artifact.slides) + persist callback. */
   slides?: Slide[];
   onSlides?: (slides: Slide[]) => void;
+  /** User-edited cover/follow-up email body (preferred over artifact.email.body) + persist callback. */
+  editedEmail?: string;
+  onEmail?: (body: string) => void;
   editable: boolean;
   goal?: string;
   context?: string;
   editorActions?: ("continue" | "improve")[];
 }) {
   const [editing, setEditing] = React.useState(false);
+  const [editingEmail, setEditingEmail] = React.useState(false);
   const { toast } = useToast();
   const bodyMarkdown = editedBody && editedBody.trim() ? editedBody : sectionsToMarkdown(artifact);
+  const emailBody = editedEmail != null ? editedEmail : artifact.email?.body ?? "";
 
   return (
     <article className="print-document">
@@ -107,11 +115,19 @@ export function ArtifactBody({
         <SafeMarkdown text={bodyMarkdown} className="prose-harbor" />
       )}
 
-      {artifact.email && artifact.email.body?.trim() && (
+      {artifact.email && emailBody.trim() && (
         <section className="mt-6 rounded-card border border-line bg-surface/50 p-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lead font-semibold text-ink">Email</h2>
-            <Badge tone="neutral">Ready to send</Badge>
+            <div className="flex items-center gap-2">
+              {editable && onEmail && (
+                <Button variant="ghost" size="sm" className="no-print" onClick={() => setEditingEmail((e) => !e)}>
+                  {editingEmail ? <Check className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
+                  {editingEmail ? "Done" : "Edit"}
+                </Button>
+              )}
+              <Badge tone="neutral">Ready to send</Badge>
+            </div>
           </div>
           {artifact.email.subjectOptions.length > 0 && (
             <div className="mt-3">
@@ -137,7 +153,17 @@ export function ArtifactBody({
           )}
           <div className="mt-3">
             <p className="text-meta text-muted">Body</p>
-            <SafeMarkdown text={artifact.email.body} className="prose-harbor mt-1.5 whitespace-pre-wrap" />
+            {editingEmail && onEmail ? (
+              <Textarea
+                aria-label="Email body"
+                className="mt-1.5 min-h-[180px] text-sm leading-relaxed"
+                value={emailBody}
+                onChange={(e) => onEmail(e.target.value)}
+                placeholder="Write the email…"
+              />
+            ) : (
+              <SafeMarkdown text={emailBody} className="prose-harbor mt-1.5 whitespace-pre-wrap" />
+            )}
           </div>
         </section>
       )}
