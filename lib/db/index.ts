@@ -23,6 +23,15 @@ export class HarborDB extends Dexie {
       preferences: "key",
       budget: "day",
     });
+    // v2: tasks gained a canonical rich-document `doc` field (ProseMirror JSON). It is non-indexed,
+    // so the store keys are unchanged; legacy `editedBody` is migrated to `doc` lazily when a task is
+    // opened in the editor (see lib/richdoc/migrate.ts → resolveDoc). No data is rewritten on upgrade.
+    this.version(2).stores({
+      tasks: "id, workspaceId, service, updatedAt, createdAt",
+      voiceProfiles: "id, updatedAt",
+      preferences: "key",
+      budget: "day",
+    });
   }
 }
 

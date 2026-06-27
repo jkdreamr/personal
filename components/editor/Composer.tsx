@@ -1,9 +1,12 @@
 "use client";
 
 import * as React from "react";
-import { Sparkles, ArrowDown, Wand2, StopCircle, ChevronDown } from "lucide-react";
-import { streamCompose, fetchGhost } from "@/lib/client/compose";
+import type { Editor } from "@tiptap/react";
+import { Sparkles, ArrowDown, Wand2, StopCircle, CornerDownLeft } from "lucide-react";
+import { streamCompose } from "@/lib/client/compose";
 import { lintText, type StyleWarning } from "@/lib/editorial/style-lint";
+import { markdownToDoc, toProseMirrorDoc, docToText, isDocEmpty, type RichDoc } from "@/lib/richdoc";
+import { RichDocumentEditor, type RichEditorChange } from "./RichDocumentEditor";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/primitives";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/overlays";
@@ -12,25 +15,26 @@ import { cn } from "@/lib/utils";
 
 export type ComposerAction = "write" | "continue" | "improve";
 
-/** Improvement presets for "Improve selection" — the user picks the kind of change. */
-const IMPROVE_OPTIONS: { label: string; instruction: string }[] = [
-  { label: "Make it shorter", instruction: "Make this shorter and tighter without losing meaning." },
-  { label: "Make it longer", instruction: "Expand this with more useful detail and specifics; keep it on point." },
-  { label: "Make it clearer", instruction: "Make this clearer and more direct; simplify any awkward phrasing." },
-  { label: "Sound more human", instruction: "Rewrite this so it sounds natural and human — less stiff, less generic, like a real person wrote it. Keep the meaning and facts." },
+/** Quick presets for "Improve selection" — alongside a freeform natural-language instruction. */
+const IMPROVE_PRESETS: { label: string; instruction: string }[] = [
+  { label: "Shorter", instruction: "Make this shorter and tighter without losing meaning." },
+  { label: "Longer", instruction: "Expand this with more useful detail and specifics; keep it on point." },
+  { label: "Clearer", instruction: "Make this clearer and more direct; simplify any awkward phrasing." },
+  { label: "More human", instruction: "Rewrite this so it sounds natural and human — less stiff, less generic. Keep the meaning and facts." },
   { label: "More formal", instruction: "Make this more formal and professional." },
-  { label: "Warmer / more casual", instruction: "Make this warmer and more conversational, while staying professional." },
+  { label: "Warmer", instruction: "Make this warmer and more conversational, while staying professional." },
 ];
 
 /**
- * A reusable cursor-style editor: inline ghost-text autocomplete (light grey, Tab to accept,
- * Esc to dismiss), live local editorial hints, and streaming Write / Continue / Improve actions.
- * Controlled by the parent. Used by the Write studio AND every tool's "Edit" mode, so editing
- * works identically everywhere. Fully testable in demo mode (compose/ghost stream locally).
+ * The reusable rich writing surface. A Tiptap document editor with a formatting toolbar, streaming
+ * Write / Continue actions, and an Improve-selection flow that preserves the exact selected range
+ * (highlighted via an editor decoration) through a preset + freeform instruction panel and replaces
+ * only that range as a single undoable action. Used by the Write studio and every tool's edit mode.
  */
 export function Composer({
-  value,
-  onChange,
+  doc,
+  initialMarkdown,
+  onDocChange,
   goal,
   context,
   tone,
@@ -38,12 +42,13 @@ export function Composer({
   actions = ["continue", "improve"],
   placeholder = "Start writing, or use the actions above…",
   minHeightClass = "min-h-[280px]",
-  editorClassName,
   autoRun,
   onStreamingChange,
 }: {
-  value: string;
-  onChange: (v: string) => void;
+  doc?: RichDoc | null;
+  /** Markdown to seed the editor when there is no canonical `doc` yet (legacy edit or generated body). */
+  initialMarkdown?: string;
+  onDocChange: (doc: RichDoc, markdown: string) => void;
   goal?: string;
   context?: string;
   tone?: string;
@@ -51,31 +56,38 @@ export function Composer({
   actions?: ComposerAction[];
   placeholder?: string;
   minHeightClass?: string;
-  editorClassName?: string;
   autoRun?: "write";
   onStreamingChange?: (streaming: boolean) => void;
 }) {
   const { toast } = useToast();
-  const [ghost, setGhost] = React.useState("");
-  const [hints, setHints] = React.useState<StyleWarning[]>([]);
+  // Seed once: prefer the canonical doc; otherwise parse the markdown seed. markdownToDoc lives in
+  // this (dynamically-loaded) chunk so Tiptap never enters the base service bundle.
+  const seedDoc = React.useMemo(
+    () => doc ?? (initialMarkdown && initialMarkdown.trim() ? markdownToDoc(initialMarkdown) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
+  const editorRef = React.useRef<Editor | null>(null);
   const [streaming, setStreaming] = React.useState(false);
-  const [improveOpen, setImproveOpen] = React.useState(false);
+  const [streamText, setStreamText] = React.useState("");
+  const [hints, setHints] = React.useState<StyleWarning[]>(() => lintText(docToText(seedDoc)));
+  const [wordCount, setWordCount] = React.useState(() => {
+    const t = docToText(seedDoc).trim();
+    return t ? t.split(/\s+/).length : 0;
+  });
 
-  const taRef = React.useRef<HTMLTextAreaElement>(null);
-  const overlayRef = React.useRef<HTMLDivElement>(null);
+  // Improve-selection panel state.
+  const [improveOpen, setImproveOpen] = React.useState(false);
+  const [preset, setPreset] = React.useState<string | null>(null);
+  const [custom, setCustom] = React.useState("");
+  const selectionRef = React.useRef<{ from: number; to: number; text: string } | null>(null);
+
   const streamCtl = React.useRef<AbortController | null>(null);
-  const ghostCtl = React.useRef<AbortController | null>(null);
-  const ghostTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const hintTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const textRef = React.useRef(docToText(seedDoc));
+  const isEmptyRef = React.useRef(isDocEmpty(seedDoc));
   const autoRan = React.useRef(false);
-  const valueRef = React.useRef(value);
-  valueRef.current = value;
-  // Mirrors of state read inside the heartbeat interval (avoids stale closures / re-arming it).
-  const ghostRef = React.useRef("");
   const streamingRef = React.useRef(false);
-  React.useEffect(() => {
-    ghostRef.current = ghost;
-  }, [ghost]);
 
   const setStreamingState = (b: boolean) => {
     setStreaming(b);
@@ -83,148 +95,98 @@ export function Composer({
     onStreamingChange?.(b);
   };
 
-  React.useEffect(() => {
-    setHints(lintText(value));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const clearGhost = React.useCallback(() => {
-    setGhost("");
-    ghostCtl.current?.abort();
-    if (ghostTimer.current) clearTimeout(ghostTimer.current);
-  }, []);
-
-  const scheduleHints = (val: string) => {
+  const scheduleHints = React.useCallback((text: string) => {
     if (hintTimer.current) clearTimeout(hintTimer.current);
-    hintTimer.current = setTimeout(() => setHints(lintText(val)), 400);
-  };
+    hintTimer.current = setTimeout(() => setHints(lintText(text)), 400);
+  }, []);
 
-  // Fetch a suggestion for the END of `val` (caret must be at the end). Shared by the quick
-  // pause-trigger and the periodic heartbeat below. No-ops while streaming or when text is too short.
-  const requestGhost = React.useCallback(
-    async (val: string) => {
-      const ta = taRef.current;
-      // Only when the editor is focused and the caret sits at the very end (don't surface a ghost
-      // in an editor the user has clicked away from, or mid-text).
-      if (!ta || (typeof document !== "undefined" && document.activeElement !== ta)) return;
-      const caretAtEnd = ta.selectionStart === val.length && ta.selectionEnd === val.length;
-      if (!caretAtEnd || streamingRef.current || val.trim().length < 10) return;
-      ghostCtl.current?.abort();
-      const ctl = new AbortController();
-      ghostCtl.current = ctl;
-      const para = val.slice(val.lastIndexOf("\n\n") + 1);
-      const s = await fetchGhost(para, goal, ctl.signal);
-      if (!ctl.signal.aborted && valueRef.current === val && s) {
-        setGhost(s.startsWith(" ") || /[\s([]$/.test(val) ? s : " " + s);
-      }
+  const handleChange = React.useCallback(
+    (change: RichEditorChange) => {
+      textRef.current = change.text;
+      isEmptyRef.current = change.isEmpty;
+      setWordCount(change.text.trim() ? change.text.trim().split(/\s+/).length : 0);
+      onDocChange(change.doc, change.markdown);
+      scheduleHints(change.text);
     },
-    [goal]
+    [onDocChange, scheduleHints]
   );
 
-  // Quick path: a short pause (850ms) after typing shows a suggestion immediately.
-  const scheduleGhost = (val: string, caretAtEnd: boolean) => {
-    if (ghostTimer.current) clearTimeout(ghostTimer.current);
-    ghostCtl.current?.abort();
-    setGhost("");
-    if (!caretAtEnd || streaming || val.trim().length < 10) return;
-    ghostTimer.current = setTimeout(() => requestGhost(val), 850);
-  };
-
-  // Heartbeat: even while writing continuously, surface a fresh suggestion roughly every 10s so the
-  // editor proactively offers a "Tab to accept" continuation (cursor-style). Only when one isn't
-  // already showing and the caret sits at the end of the text.
-  React.useEffect(() => {
-    const id = setInterval(() => {
-      if (!ghostRef.current && !streamingRef.current) requestGhost(valueRef.current);
-    }, 10_000);
-    return () => clearInterval(id);
-  }, [requestGhost]);
-
-  const handleChange = (val: string) => {
-    onChange(val);
-    scheduleHints(val);
-    const ta = taRef.current;
-    const caretAtEnd = ta ? ta.selectionStart === val.length && ta.selectionEnd === val.length : false;
-    scheduleGhost(val, caretAtEnd);
-  };
-
-  const acceptGhost = () => {
-    if (!ghost) return;
-    const next = value + ghost;
-    setGhost("");
-    onChange(next);
-    scheduleHints(next);
-    requestAnimationFrame(() => {
-      const ta = taRef.current;
-      if (ta) {
-        ta.focus();
-        ta.setSelectionRange(next.length, next.length);
-      }
-    });
-  };
-
-  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (ghost && e.key === "Tab") {
-      e.preventDefault();
-      acceptGhost();
-      return;
+  const maybeAutoRun = React.useCallback(() => {
+    if (autoRun === "write" && !autoRan.current && goal?.trim() && isEmptyRef.current && !streamingRef.current) {
+      autoRan.current = true;
+      run("write");
     }
-    if (ghost && e.key === "Escape") {
-      e.preventDefault();
-      clearGhost();
-      return;
-    }
-    if (ghost) clearGhost();
-    if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && actions.includes("continue")) {
-      e.preventDefault();
-      run("continue");
-    }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoRun, goal]);
 
-  const onScroll = () => {
-    if (overlayRef.current && taRef.current) overlayRef.current.scrollTop = taRef.current.scrollTop;
+  const onReady = React.useCallback(
+    (editor: Editor) => {
+      editorRef.current = editor;
+      maybeAutoRun();
+    },
+    [maybeAutoRun]
+  );
+
+  // ---- streaming Write / Continue / Improve --------------------------------
+
+  const commitStream = (mode: ComposerAction, acc: string, sel: { from: number; to: number } | null) => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const text = acc.trim();
+    if (!text) return;
+    if (mode === "improve" && sel) {
+      // Replace EXACTLY the selected range with the rewrite — one undoable transaction — and clear
+      // the highlight. Surrounding formatting is untouched.
+      editor.chain().focus().clearImproveHighlight().insertContentAt({ from: sel.from, to: sel.to }, text).run();
+      selectionRef.current = null;
+    } else if (mode === "write" && isEmptyRef.current) {
+      editor.commands.setContent(toProseMirrorDoc(markdownToDoc(text)));
+    } else {
+      const parsed = markdownToDoc(text);
+      editor.chain().focus("end").insertContent(parsed.content).run();
+    }
   };
 
   const run = (mode: ComposerAction, instruction?: string) => {
-    if (streaming) return;
-    clearGhost();
-    const ta = taRef.current;
-    const base = value;
-    let selStart = base.length;
-    let selEnd = base.length;
-    let selection = "";
+    if (streamingRef.current) return;
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    let sel: { from: number; to: number; text: string } | null = null;
     if (mode === "improve") {
-      if (!ta) return;
-      selStart = ta.selectionStart;
-      selEnd = ta.selectionEnd;
-      selection = base.slice(selStart, selEnd);
-      if (!selection.trim()) {
+      sel = selectionRef.current;
+      if (!sel || !sel.text.trim()) {
         toast({ title: "Select the text you want to improve first." });
         return;
       }
     }
-    const replaceAll = mode === "write" && base.trim().length === 0;
 
     setStreamingState(true);
+    setStreamText("");
     let acc = "";
     streamCtl.current = streamCompose(
-      { mode, goal, context, currentText: base, selection, instruction, tone: tone || undefined, length: length || undefined },
+      {
+        mode,
+        goal,
+        context,
+        currentText: textRef.current,
+        selection: sel?.text ?? "",
+        instruction,
+        tone: tone || undefined,
+        length: length || undefined,
+      },
       {
         onDelta: (d) => {
           acc += d;
-          if (mode === "improve") onChange(base.slice(0, selStart) + acc + base.slice(selEnd));
-          else if (replaceAll) onChange(acc);
-          else {
-            const sep = !base || base.endsWith("\n") || mode === "continue" ? "" : "\n\n";
-            onChange(base + sep + acc);
-          }
+          setStreamText(acc);
         },
         onDone: () => {
+          commitStream(mode, acc, sel ? { from: sel.from, to: sel.to } : null);
           setStreamingState(false);
-          scheduleHints(valueRef.current);
         },
         onError: (m) => {
           setStreamingState(false);
+          editor.commands.clearImproveHighlight();
           toast({ title: m, tone: "danger" });
         },
       }
@@ -234,27 +196,56 @@ export function Composer({
   const stop = () => {
     streamCtl.current?.abort();
     setStreamingState(false);
+    editorRef.current?.commands.clearImproveHighlight();
   };
 
-  // Auto-run once (e.g. arriving from the home intake with a goal and an empty editor).
-  React.useEffect(() => {
-    if (autoRun === "write" && !autoRan.current && goal?.trim() && !value.trim() && !streaming) {
-      autoRan.current = true;
-      run("write");
+  // ---- Improve panel open/close (captures + highlights the selection) ------
+
+  const openImprove = () => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const { from, to, empty } = editor.state.selection;
+    if (empty) {
+      toast({ title: "Select the text you want to improve first." });
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoRun, goal]);
+    const text = editor.state.doc.textBetween(from, to, " ");
+    selectionRef.current = { from, to, text };
+    editor.commands.setImproveHighlight({ from, to });
+    setPreset(null);
+    setCustom("");
+    setImproveOpen(true);
+  };
+
+  const closeImprove = (apply: boolean) => {
+    setImproveOpen(false);
+    const editor = editorRef.current;
+    if (!apply) {
+      editor?.commands.clearImproveHighlight();
+      const sel = selectionRef.current;
+      if (editor && sel) editor.chain().focus().setTextSelection({ from: sel.from, to: sel.to }).run();
+      selectionRef.current = null;
+    }
+  };
+
+  const applyImprove = () => {
+    const instruction = custom.trim() || (preset ? IMPROVE_PRESETS.find((p) => p.label === preset)?.instruction : "");
+    if (!instruction) return;
+    setImproveOpen(false);
+    run("improve", instruction);
+  };
+
+  const canApply = Boolean(custom.trim().length > 1 || preset);
 
   React.useEffect(() => {
     return () => {
       streamCtl.current?.abort();
-      ghostCtl.current?.abort();
-      [ghostTimer, hintTimer].forEach((t) => t.current && clearTimeout(t.current));
+      if (hintTimer.current) clearTimeout(hintTimer.current);
     };
   }, []);
 
-  const wordCount = value.trim() ? value.trim().split(/\s+/).length : 0;
-  const writeLabel = value.trim() ? "Rewrite" : "Write it for me";
+  const selPreview = selectionRef.current?.text ?? "";
+  const writeLabel = isEmptyRef.current ? "Write it for me" : "Rewrite";
 
   return (
     <div>
@@ -266,31 +257,75 @@ export function Composer({
           </Button>
         )}
         {actions.includes("continue") && (
-          <Button size="sm" variant="secondary" onClick={() => run("continue")} disabled={streaming || !value.trim()}>
+          <Button size="sm" variant="secondary" onClick={() => run("continue")} disabled={streaming}>
             <ArrowDown className="h-4 w-4" /> Continue
           </Button>
         )}
         {actions.includes("improve") && (
-          <Popover open={improveOpen} onOpenChange={setImproveOpen}>
+          <Popover open={improveOpen} onOpenChange={(o) => (o ? openImprove() : closeImprove(false))}>
             <PopoverTrigger asChild>
-              <Button size="sm" variant="secondary" disabled={streaming}>
-                <Wand2 className="h-4 w-4" /> Improve selection <ChevronDown className="h-3.5 w-3.5" />
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={streaming}
+                // Keep the editor focused so the text selection isn't collapsed before we capture it.
+                onMouseDown={(e) => e.preventDefault()}
+              >
+                <Wand2 className="h-4 w-4" /> Improve selection
               </Button>
             </PopoverTrigger>
-            <PopoverContent align="start" className="w-56">
-              <p className="px-2 pb-1 text-meta text-muted">Improve the selected text…</p>
-              {IMPROVE_OPTIONS.map((opt) => (
-                <button
-                  key={opt.label}
-                  onClick={() => {
-                    setImproveOpen(false);
-                    run("improve", opt.instruction);
-                  }}
-                  className="flex w-full items-center rounded-btn px-2.5 py-2 text-left text-sm text-ink hover:bg-ink/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/70"
-                >
-                  {opt.label}
+            <PopoverContent align="start" className="w-[20rem]">
+              <p className="text-meta font-medium text-muted">Improve the selected text</p>
+              {selPreview && (
+                <p className="mt-1.5 max-h-16 overflow-auto rounded-btn bg-ink/[0.04] px-2.5 py-1.5 text-sm text-ink/80">
+                  “{selPreview.length > 160 ? selPreview.slice(0, 160) + "…" : selPreview}”
+                </p>
+              )}
+              <div className="mt-2.5 flex flex-wrap gap-1.5">
+                {IMPROVE_PRESETS.map((p) => (
+                  <button
+                    key={p.label}
+                    type="button"
+                    onClick={() => setPreset((cur) => (cur === p.label ? null : p.label))}
+                    aria-pressed={preset === p.label}
+                    className={cn(
+                      "rounded-chip border px-2.5 py-1 text-meta transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/70",
+                      preset === p.label ? "border-ink/30 bg-ink/[0.10] text-ink" : "border-line text-ink/80 hover:bg-ink/[0.05]"
+                    )}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+              <label htmlFor="rd-improve-custom" className="mt-3 block text-meta text-muted">
+                Or describe the change
+              </label>
+              <textarea
+                id="rd-improve-custom"
+                value={custom}
+                onChange={(e) => setCustom(e.target.value)}
+                onKeyDown={(e) => {
+                  if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && canApply) {
+                    e.preventDefault();
+                    applyImprove();
+                  }
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    closeImprove(false);
+                  }
+                }}
+                rows={2}
+                placeholder='e.g. I don&apos;t like the word "utilize" — use something simpler and rewrite the sentence.'
+                className="mt-1 w-full resize-none rounded-btn border border-line bg-surface px-2.5 py-1.5 text-sm text-ink placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/70"
+              />
+              <div className="mt-2.5 flex items-center justify-between">
+                <button onClick={() => closeImprove(false)} className="text-meta text-muted underline underline-offset-2 hover:text-ink">
+                  Cancel
                 </button>
-              ))}
+                <Button size="sm" onClick={applyImprove} disabled={!canApply}>
+                  Apply <CornerDownLeft className="h-3.5 w-3.5" />
+                </Button>
+              </div>
             </PopoverContent>
           </Popover>
         )}
@@ -301,32 +336,28 @@ export function Composer({
         )}
       </div>
 
-      {/* editor with inline ghost overlay (light grey autocomplete) */}
-      <div className={cn("relative rounded-card border border-line bg-surface", minHeightClass, editorClassName)}>
-        <div
-          ref={overlayRef}
-          aria-hidden
-          className="pointer-events-none absolute inset-0 overflow-auto whitespace-pre-wrap break-words px-3.5 py-3 font-sans text-base leading-relaxed text-transparent"
-        >
-          {value}
-          {/* Explicit colour (not a Tailwind opacity class) so it overrides the overlay's
-              transparent text — this is the visible light-grey inline autocomplete. */}
-          {ghost && <span style={{ color: "var(--harbor-muted-soft)" }}>{ghost}</span>}
-        </div>
-        <textarea
-          ref={taRef}
-          value={value}
-          onChange={(e) => handleChange(e.target.value)}
-          onKeyDown={onKeyDown}
-          onScroll={onScroll}
-          onSelect={() => ghost && clearGhost()}
-          onBlur={clearGhost}
-          disabled={streaming}
-          spellCheck
+      {/* The editor stays mounted at all times (so streamed content commits to the live instance and
+          survives); during streaming it is hidden and a calm live preview takes its place. */}
+      <div className={cn(streaming && "hidden")}>
+        <RichDocumentEditor
+          initialDoc={seedDoc}
           placeholder={placeholder}
-          className="absolute inset-0 h-full w-full resize-none bg-transparent px-3.5 py-3 font-sans text-base leading-relaxed text-ink caret-ink placeholder:text-muted focus-visible:outline-none"
+          minHeightClass={minHeightClass}
+          ariaLabel="Document editor"
+          onChange={handleChange}
+          onReady={onReady}
         />
       </div>
+      {streaming && (
+        <div className="rich-editor" aria-live="polite">
+          <div className={cn("rounded-card border border-line bg-surface", minHeightClass)}>
+            <div className="ProseMirror whitespace-pre-wrap px-3.5 py-3 text-ink">
+              {streamText}
+              <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-ink/60 align-text-bottom" aria-hidden />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* status / hints */}
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 no-print">
@@ -348,17 +379,15 @@ export function Composer({
                   <p className="px-1 pb-1 text-meta font-medium text-muted">Editorial hints — yours to take or leave</p>
                   <ul className="space-y-1">
                     {hints.slice(0, 8).map((h, i) => (
-                      <li key={i} className="rounded-btn px-2 py-1.5 text-sm text-ink/85 hover:bg-ink/[0.04]">{h.message}</li>
+                      <li key={i} className="rounded-btn px-2 py-1.5 text-sm text-ink/85 hover:bg-ink/[0.04]">
+                        {h.message}
+                      </li>
                     ))}
                   </ul>
                 </PopoverContent>
               </Popover>
             )}
-            {ghost ? (
-              <span className="text-meta text-muted">suggestion ready — press Tab to accept</span>
-            ) : (
-              value.trim().length >= 10 && <span className="text-meta text-muted">suggestions appear as you write · Tab to accept</span>
-            )}
+            {actions.includes("improve") && <span className="text-meta text-muted">Select text, then Improve · ⌘B/I/U to format</span>}
           </>
         )}
       </div>

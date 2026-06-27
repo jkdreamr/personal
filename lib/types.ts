@@ -6,6 +6,7 @@
  */
 
 import type { ServiceId } from "./services";
+import type { RichDoc } from "./richdoc/types";
 
 export type TrustTier =
   | "primary"
@@ -173,7 +174,12 @@ export type Task = {
   attachments: Attachment[];
   adjustments: Adjustments;
   artifact?: Artifact;
-  /** User edits to the artifact body, kept separate so regeneration doesn't clobber them. */
+  /**
+   * Canonical user-edited body as a rich document (ProseMirror JSON). Source of truth for edits.
+   * Kept separate from the artifact so regeneration doesn't clobber manual work.
+   */
+  doc?: RichDoc;
+  /** Derived markdown projection of `doc` (or a legacy plain edit). Kept for exports/AI context. */
   editedBody?: string;
   state: JobState;
   error?: string;

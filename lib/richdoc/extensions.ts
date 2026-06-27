@@ -11,6 +11,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import { InlineMath, BlockMath } from "@tiptap/extension-mathematics";
 import { Markdown } from "tiptap-markdown";
 import type { Extensions } from "@tiptap/core";
+import { ImproveHighlight } from "./improve-highlight";
 
 export type RichDocExtensionOptions = {
   /** Placeholder text shown in an empty editor. */
@@ -39,6 +40,7 @@ export function richDocExtensions(opts: RichDocExtensionOptions = {}): Extension
     // Markdown paste conversion; html:false blocks raw HTML injection from pasted/loaded content.
     Markdown.configure({ html: false, transformPastedText: true, transformCopiedText: false, breaks: false }),
     Placeholder.configure({ placeholder: opts.placeholder ?? "Start writing…" }),
+    ImproveHighlight,
   ];
 }
 

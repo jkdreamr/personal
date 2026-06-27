@@ -10,9 +10,9 @@ test.describe("Write studio (demo mode)", () => {
     await page.getByLabel("What are you writing?").fill("A short, warm follow-up to Dana confirming the March start.");
     await page.getByRole("button", { name: "Write it for me" }).click();
 
-    // The draft streams into the editor.
-    const editor = page.getByPlaceholder(/Start writing/);
-    await expect(editor).toHaveValue(/Demo draft|March start/i, { timeout: 15000 });
+    // The draft streams, then commits into the rich document editor.
+    const editor = page.getByRole("textbox", { name: "Document editor" });
+    await expect(editor).toContainText(/Demo draft|March start/i, { timeout: 15000 });
 
     // Copy the draft.
     await page.getByRole("button", { name: "Copy", exact: true }).click();
@@ -27,18 +27,36 @@ test.describe("Write studio (demo mode)", () => {
 
   test("typing surfaces live editorial hints", async ({ page }) => {
     await page.goto("/write");
-    const editor = page.getByPlaceholder(/Start writing/);
-    await editor.fill("In conclusion, we leverage robust holistic synergy to unlock game-changing value.");
+    const editor = page.getByRole("textbox", { name: "Document editor" });
+    await editor.click();
+    await page.keyboard.type("In conclusion, we leverage robust holistic synergy to unlock game-changing value.");
     // Local style hints appear without a model call.
-    await expect(page.getByRole("button", { name: /suggestion/ })).toBeVisible({ timeout: 5000 });
+    await expect(page.getByRole("button", { name: /suggestion/ })).toBeVisible({ timeout: 6000 });
+  });
+
+  test("rich formatting via toolbar and keyboard shortcuts", async ({ page }) => {
+    await page.goto("/write");
+    const editor = page.getByRole("textbox", { name: "Document editor" });
+    await editor.click();
+    await page.keyboard.type("A bold idea");
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.getByRole("button", { name: "Bold" }).click();
+    await expect(editor.locator("strong")).toHaveText("A bold idea");
+
+    // Bulleted list via the toolbar.
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.getByRole("button", { name: "Bulleted list" }).click();
+    await expect(editor.locator("ul li")).toHaveCount(1);
   });
 
   test("draft persists across a refresh", async ({ page }) => {
     await page.goto("/write");
-    await page.getByPlaceholder(/Start writing/).fill("My own sentence that should survive a reload.");
+    const editor = page.getByRole("textbox", { name: "Document editor" });
+    await editor.click();
+    await page.keyboard.type("My own sentence that should survive a reload.");
     await expect(page).toHaveURL(/\/write\?task=/, { timeout: 5000 });
-    await page.waitForTimeout(800); // let autosave flush
+    await page.waitForTimeout(900); // let autosave flush
     await page.reload();
-    await expect(page.getByPlaceholder(/Start writing/)).toHaveValue(/should survive a reload/);
+    await expect(page.getByRole("textbox", { name: "Document editor" })).toContainText(/should survive a reload/, { timeout: 8000 });
   });
 });

@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import dynamic from "next/dynamic";
 import { Info, Pencil, Check } from "lucide-react";
 import type { Artifact } from "@/lib/types";
 import { Badge } from "@/components/ui/primitives";
@@ -8,8 +9,19 @@ import { Button } from "@/components/ui/button";
 import { SafeMarkdown } from "./SafeMarkdown";
 import { SlideDeck } from "./SlideDeck";
 import { ComparisonView } from "./ComparisonView";
-import { Composer } from "@/components/editor/Composer";
+import type { RichDoc } from "@/lib/richdoc/types";
 import { copyToClipboard } from "@/lib/client/download";
+
+// The rich editor (Tiptap + KaTeX, ~270kB) loads only when a result is actually edited or rendered
+// as a rich document — most results are viewed without it, so it stays out of the base bundle.
+const Composer = dynamic(() => import("@/components/editor/Composer").then((m) => m.Composer), {
+  ssr: false,
+  loading: () => <div className="min-h-[340px] rounded-card border border-line bg-surface" aria-hidden />,
+});
+const RichDocumentRenderer = dynamic(() => import("@/components/editor/RichDocumentRenderer").then((m) => m.RichDocumentRenderer), {
+  ssr: false,
+  loading: () => <div className="min-h-[120px]" aria-hidden />,
+});
 import { useToast } from "@/components/ui/toast";
 import { CLAIM_LABELS } from "@/lib/research/citation-builder";
 import { TRUST_TIER_LABELS } from "@/lib/research/trust-tier";
@@ -20,16 +32,19 @@ export function sectionsToMarkdown(artifact: Artifact): string {
 
 export function ArtifactBody({
   artifact,
+  doc,
   editedBody,
-  onEditBody,
+  onDoc,
   editable,
   goal,
   context,
   editorActions = ["continue", "improve"],
 }: {
   artifact: Artifact;
+  doc?: RichDoc | null;
   editedBody?: string;
-  onEditBody: (body: string) => void;
+  /** Persist the canonical rich doc + its derived markdown. */
+  onDoc: (doc: RichDoc, markdown: string) => void;
   editable: boolean;
   goal?: string;
   context?: string;
@@ -72,14 +87,17 @@ export function ArtifactBody({
 
       {editing ? (
         <Composer
-          value={bodyMarkdown}
-          onChange={onEditBody}
+          doc={doc}
+          initialMarkdown={bodyMarkdown}
+          onDocChange={onDoc}
           goal={goal}
           context={context}
           actions={editorActions}
           minHeightClass="min-h-[340px]"
-          placeholder="Edit freely — type for suggestions, select text and Improve, or Continue from the end…"
+          placeholder="Edit freely — format with the toolbar, select text and Improve, or Continue from the end…"
         />
+      ) : doc ? (
+        <RichDocumentRenderer doc={doc} className="prose-harbor" />
       ) : (
         <SafeMarkdown text={bodyMarkdown} className="prose-harbor" />
       )}

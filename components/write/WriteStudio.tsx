@@ -12,9 +12,16 @@ import { Button } from "@/components/ui/button";
 import { Textarea, Label } from "@/components/ui/field";
 import { Eyebrow } from "@/components/ui/primitives";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/overlays";
+import dynamic from "next/dynamic";
 import { AttachmentAdder } from "@/components/workspace/AttachmentAdder";
-import { Composer } from "@/components/editor/Composer";
+import type { RichDoc } from "@/lib/richdoc/types";
 import { useToast } from "@/components/ui/toast";
+
+// Load the rich editor on demand so the studio shell paints first.
+const Composer = dynamic(() => import("@/components/editor/Composer").then((m) => m.Composer), {
+  ssr: false,
+  loading: () => <div className="min-h-[60vh] rounded-card border border-line bg-surface" aria-hidden />,
+});
 
 const TONES = ["", "Direct", "Professional", "Warm", "Formal"];
 const LENGTHS = ["", "Short", "Balanced", "Thorough"];
@@ -36,7 +43,9 @@ function Studio() {
   const [task, setTask] = React.useState<Task | null>(null);
   const [goal, setGoal] = React.useState("");
   const [attachments, setAttachments] = React.useState<Attachment[]>([]);
-  const [text, setText] = React.useState("");
+  // Canonical rich document + its derived markdown (for copy/export/print and AI context).
+  const [docState, setDocState] = React.useState<RichDoc | null>(null);
+  const [markdown, setMarkdown] = React.useState("");
   const [tone, setTone] = React.useState("");
   const [length, setLength] = React.useState("");
   const [savedAt, setSavedAt] = React.useState<string | null>(null);
@@ -52,7 +61,10 @@ function Studio() {
         setTask(existing);
         setGoal(existing.goal);
         setAttachments(existing.attachments);
-        setText(existing.editedBody ?? (existing.artifact ? existing.artifact.sections.map((s) => s.body).join("\n\n") : ""));
+        // Prefer the canonical doc; else seed the editor from a legacy edit / existing draft artifact.
+        const seedMd = existing.editedBody ?? (existing.artifact ? existing.artifact.sections.map((s) => s.body).join("\n\n") : "");
+        setDocState(existing.doc ?? null);
+        setMarkdown(seedMd);
         setTone(existing.adjustments.tone ?? "");
         setLength(existing.adjustments.length ?? "");
       } else {
@@ -88,26 +100,27 @@ function Studio() {
 
   // Reflect the task id in the URL so a refresh restores the draft.
   React.useEffect(() => {
-    if (!taskId && task && (text.trim() || goal.trim())) {
+    if (!taskId && task && (markdown.trim() || goal.trim())) {
       window.history.replaceState(window.history.state, "", `/write?task=${task.id}`);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskId, task?.id, text, goal]);
+  }, [taskId, task?.id, markdown, goal]);
 
-  const onText = (v: string) => {
-    setText(v);
-    persist({ editedBody: v });
+  const onDoc = (d: RichDoc, md: string) => {
+    setDocState(d);
+    setMarkdown(md);
+    persist({ doc: d, editedBody: md });
   };
 
   const contextText = React.useMemo(() => attachments.map((a) => a.text).filter(Boolean).join("\n\n"), [attachments]);
 
   const doCopy = async () => {
-    const ok = await copyToClipboard(text);
+    const ok = await copyToClipboard(markdown);
     toast({ title: ok ? "Copied to clipboard." : "Couldn't copy.", tone: ok ? "success" : "danger" });
   };
   const doExport = (ext: "md" | "txt") => {
     const name = exportFilename("write", task?.title || goal || "draft", ext);
-    const ok = downloadText(name, text + "\n", ext === "md" ? "text/markdown" : "text/plain");
+    const ok = downloadText(name, markdown + "\n", ext === "md" ? "text/markdown" : "text/plain");
     toast(ok ? { title: "Exported", description: name, tone: "success" } : { title: "Couldn't export.", tone: "danger" });
   };
 
@@ -189,14 +202,16 @@ function Studio() {
               </select>
             </div>
           </div>
-          <p className="text-meta text-muted">Type freely — a grey suggestion appears as you write; press <kbd className="rounded border border-line bg-surface px-1">Tab</kbd> to accept.</p>
+          <p className="text-meta text-muted">A clean document editor — format with the toolbar or ⌘B/I/U. Select text and Improve, or Continue from the end.</p>
         </div>
 
         {/* center: the editor */}
         <div className="min-w-0 p-4 sm:p-6">
           <Composer
-            value={text}
-            onChange={onText}
+            key={task?.id ?? "new"}
+            doc={docState}
+            initialMarkdown={markdown}
+            onDocChange={onDoc}
             goal={goal}
             context={contextText}
             tone={tone}
@@ -211,7 +226,7 @@ function Studio() {
 
       <div className="print-document hidden print:block">
         <h1>{task?.title || "Draft"}</h1>
-        <div style={{ whiteSpace: "pre-wrap" }}>{text}</div>
+        <div style={{ whiteSpace: "pre-wrap" }}>{markdown}</div>
       </div>
     </div>
   );
