@@ -52,8 +52,15 @@ ProseMirror/Tiptap. This doc records the decisions; see `lib/richdoc/` and `comp
 decoration **at the caret** (not at the document end), bound to a position and invalidated the moment
 the doc changes or the caret moves. Tab accepts (one undoable insert), Esc dismisses; with no ghost,
 Tab falls through to list indentation (`priority: 1000`). `components/editor/useGhostText.ts` drives
-requests: a 650ms idle debounce + a ~9s heartbeat, suppressed during IME composition, selection,
-code/math nodes, blur, and streaming. Stale requests abort; failures are silent.
+requests on a short idle debounce, suppressed during IME composition, selection, code/math nodes,
+blur, and streaming. Stale requests abort; failures are silent.
+
+It fires at two safe spots after a finished word: the **end of the block**, or a **sentence boundary
+mid-block** (after `. `/`? `/`! `) — never mid-word or mid-clause. The mid-block case is **suffix-
+aware**: the text after the caret is sent to `/api/autocomplete` (continue BETWEEN before/after), and
+the candidate passes through `lib/client/ghost-fit.ts` `fitBeforeSuffix()` — dropped if it duplicates
+what already follows, otherwise closed with a separating space so it can't glue onto the next
+sentence.
 
 ## Writing fonts (per-text)
 
@@ -74,16 +81,23 @@ replacement, a category (clarity / concision / grammar / punctuation / word-choi
 flow / repetition / structure / specificity / consistency / **addition**), and a rationale, plus
 document-level "overall direction". The prompt asks for a thorough markup (up to 16, de-duped), not
 just "the few most valuable"; an **addition** is expressed as a replacement that copies the existing
-sentence and appends a new one. Targets are located in the doc via `lib/richdoc/find-range.ts`
-(per-block search) and marked inline by the `SuggestionMarks` decoration
-(`lib/richdoc/suggestion-marks.ts`, amber underline, remapped through edits). `SuggestPanel` lists them
-with Accept / Dismiss / Refresh — all real buttons (keyboard + touch, no hover-only). **Hovering** an
-inline marker pops a `SuggestionHoverCard` anchored to it (the change + rationale + Accept/Dismiss),
-with a short close delay so the pointer can travel into the card; it's a convenience over the panel,
-never the only path.
-Accept replaces exactly the mapped range as one undoable transaction; on each edit the targets are
-re-resolved so a suggestion whose text changed is marked **stale** (Accept disabled, Refresh offered).
-Demo mode (`lib/ai/demo-suggest.ts`) returns deterministic local suggestions for testing.
+sentence and appends a new one. It is also **service-aware**: the editing surface sends its service
+(write/notes/proposal/…) so `/api/suggest` applies a per-service editorial lens (proposal → credible /
+client-first; notes → brief / don't formalize; decide → neutral across options; …).
+
+**Occurrence-safe targeting** is the key correctness property. Each suggestion carries optional
+before/after context anchors; `findAnchoredRange` (`lib/richdoc/find-range.ts`) picks the occurrence
+whose surroundings match the anchors and **refuses to guess** when a repeated quote stays ambiguous —
+so an edit never lands on the wrong sentence. Live tracking trusts **ProseMirror transaction mapping**:
+markers follow edits via the `SuggestionMarks` plugin's mapped ranges (no re-search → no jumping), and
+a suggestion is stale only when the text under its mapped range no longer equals the target. Accept
+replaces exactly that mapped range as one undoable transaction.
+
+`SuggestPanel` lists suggestions with Accept / Dismiss / Refresh — all real buttons (keyboard + touch,
+no hover-only). **Hovering** an inline marker pops a `SuggestionHoverCard` anchored to it (the change +
+rationale + Accept/Dismiss), with a short close delay so the pointer can travel into the card; it's a
+convenience over the panel, never the only path. Demo mode (`lib/ai/demo-suggest.ts`) returns
+deterministic local suggestions (with anchors) for testing.
 
 ## Editable surfaces beyond prose
 
@@ -92,10 +106,12 @@ follow the same "edit persists separately from the regenerated artifact" rule as
 
 - **Slides (Present)** — `components/workspace/SlideDeck.tsx` is a full deck surface: a slide
   navigator (thumbnails, `aria-current`), click-to-edit fields per slide (layout, title, message,
-  bullets, speaker notes), add / duplicate / delete / reorder with a 40-step undo history, and a
-  keyboard-driven Present mode (arrows / space / PageUp-Down, Escape exits). Edits persist to
-  `Task.slides` (preferred over `artifact.slides`); regeneration clears them. Slides inherit the
-  `--writing-font`. Print uses a static block — never a nested `print-document`.
+  bullets, speaker notes), add / duplicate / delete / reorder with a 40-step undo history, and two
+  full-screen present modes (arrows / space / PageUp-Down navigate, Escape exits): a clean **audience
+  view** and a **presenter view** (current + next slide, the slide's speaker notes, an elapsed-time
+  clock, and slide position), toggleable in-session. Edits persist to `Task.slides` (preferred over
+  `artifact.slides`); regeneration clears them. Print uses a static block — never a nested
+  `print-document`.
 - **Cover / follow-up email (Proposal, Meeting, Write)** — `ArtifactBody` renders the email body with
   a quiet Edit/Done toggle that swaps to a textarea. Edits persist to `Task.editedEmail` (saved
   immediately, since email edits are infrequent and a refresh right after must not drop them), are
