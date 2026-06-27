@@ -88,6 +88,7 @@
   /* Editorial prose used for generated artifacts. Restrained, readable. */
   .prose-harbor {
     color: var(--harbor-ink);
+    font-family: var(--writing-font, var(--font-sans));
     font-size: 1rem;
     line-height: 1.65;
   }
@@ -139,6 +140,7 @@
   .rich-editor .ProseMirror {
     outline: none;
     color: var(--harbor-ink);
+    font-family: var(--writing-font, var(--font-sans));
     font-size: 1rem;
     line-height: 1.65;
     min-height: inherit;

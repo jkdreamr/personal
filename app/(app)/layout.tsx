@@ -1,10 +1,12 @@
 import { Sidebar } from "@/components/shell/Sidebar";
 import { MobileNav } from "@/components/shell/MobileNav";
 import { Providers } from "@/components/providers";
+import { WritingFontInit } from "@/components/editor/WritingFontInit";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <Providers>
+      <WritingFontInit />
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-[200] focus:rounded-btn focus:bg-ink focus:px-3 focus:py-2 focus:text-canvas"

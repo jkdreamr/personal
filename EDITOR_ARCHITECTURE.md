@@ -46,7 +46,27 @@ ProseMirror/Tiptap. This doc records the decisions; see `lib/richdoc/` and `comp
   nofollow"`.
 - Invalid LaTeX renders inline via KaTeX `throwOnError:false` — never crashes the document.
 
+## Autocomplete (cursor-anchored)
+
+`lib/richdoc/ghost-text.ts` is a ProseMirror extension that renders the suggestion as a grey widget
+decoration **at the caret** (not at the document end), bound to a position and invalidated the moment
+the doc changes or the caret moves. Tab accepts (one undoable insert), Esc dismisses; with no ghost,
+Tab falls through to list indentation (`priority: 1000`). `components/editor/useGhostText.ts` drives
+requests: a 650ms idle debounce + a ~9s heartbeat, suppressed during IME composition, selection,
+code/math nodes, blur, and streaming. Stale requests abort; failures are silent.
+
+## Writing fonts
+
+`lib/client/writing-fonts.ts` defines a small system-only font set (sans/serif/book/mono — zero
+downloads). `useWritingFont` persists the choice in the preferences store and applies it via a
+`--writing-font` CSS variable on the document root, consumed by `.ProseMirror` and `.prose-harbor`
+(the app chrome keeps `--font-sans`, so UI hierarchy is unaffected). `WritingFontInit` (in the app
+layout) applies it on every page; `WritingFontPicker` is the document-settings control.
+
 ## Testing
 
 `tests/unit/richdoc.test.ts` (jsdom) covers serialization of every node/mark, markdown round-trips,
 checklist round-trips, inline/block math, malformed-input safety, and legacy migration precedence.
+`tests/unit/writing-fonts.test.ts` covers font resolution. E2E (`write.spec.ts`, `editing.spec.ts`)
+cover toolbar/keyboard formatting, cursor-anchored autocomplete (Tab/Esc + list-indent fallthrough),
+the Improve-selection flow (visible highlight + exact replacement), and font persistence.

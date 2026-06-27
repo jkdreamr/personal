@@ -79,6 +79,18 @@ test.describe("Write studio (demo mode)", () => {
     await expect(editor.locator("ul ul")).toHaveCount(1);
   });
 
+  test("writing font selection applies and persists after refresh", async ({ page }) => {
+    await page.goto("/write");
+    const editor = page.getByRole("textbox", { name: "Document editor" });
+    await page.getByLabel("Writing font").selectOption("serif");
+    // The editor adopts the chosen serif stack.
+    await expect(editor).toHaveCSS("font-family", /Iowan|Palatino|Georgia/);
+    await page.waitForTimeout(400); // let the preference persist
+    await page.reload();
+    await expect(page.getByLabel("Writing font")).toHaveValue("serif");
+    await expect(page.getByRole("textbox", { name: "Document editor" })).toHaveCSS("font-family", /Iowan|Palatino|Georgia/);
+  });
+
   test("draft persists across a refresh", async ({ page }) => {
     await page.goto("/write");
     const editor = page.getByRole("textbox", { name: "Document editor" });

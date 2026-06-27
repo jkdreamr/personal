@@ -14,6 +14,7 @@ import { Eyebrow } from "@/components/ui/primitives";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/overlays";
 import dynamic from "next/dynamic";
 import { AttachmentAdder } from "@/components/workspace/AttachmentAdder";
+import { WritingFontPicker } from "@/components/editor/WritingFontPicker";
 import type { RichDoc } from "@/lib/richdoc/types";
 import { useToast } from "@/components/ui/toast";
 
@@ -202,6 +203,7 @@ function Studio() {
               </select>
             </div>
           </div>
+          <WritingFontPicker />
           <p className="text-meta text-muted">A clean document editor — format with the toolbar or ⌘B/I/U. Select text and Improve, or Continue from the end.</p>
         </div>
 
