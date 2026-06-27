@@ -28,6 +28,21 @@ test.describe("Existing-draft entry (demo mode)", () => {
   });
 });
 
+test.describe("Starting points (modes)", () => {
+  test("a common-use chip fills the goal with a natural sentence, then the chips step aside", async ({ page }) => {
+    await page.goto("/research");
+    const goal = page.getByRole("textbox", { name: "What do you want to understand?" });
+    await expect(goal).toHaveValue("");
+    // The quiet "Common uses" row is offered on the empty screen.
+    await expect(page.getByText("Common uses:")).toBeVisible();
+    await page.getByRole("button", { name: "Competitor scan" }).click();
+    // It prefills a real sentence the user can edit — not a bare label.
+    await expect(goal).toHaveValue(/competitors/i);
+    // Once there's a goal, the starting-point chips are no longer in the way.
+    await expect(page.getByText("Common uses:")).toHaveCount(0);
+  });
+});
+
 test.describe("Intelligence + Create services (demo mode)", () => {
   test("Present: build, navigate, edit a slide, add/delete with undo, and present-mode keyboard", async ({ page }) => {
     await page.goto("/present");

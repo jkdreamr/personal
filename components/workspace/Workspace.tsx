@@ -23,6 +23,33 @@ import { Toolbar } from "./Toolbar";
 
 type MobilePane = "context" | "work" | "sources";
 
+// Optional "starting points" for services whose job has a few common shapes. Shown only on the
+// empty first screen as quiet, optional chips — never a required choice. Clicking one fills the
+// goal with a natural sentence so a non-technical user isn't staring at a blank box. The labels
+// mirror each service's `modes` in lib/services.ts.
+const MODE_STARTERS: Partial<Record<ServiceId, Record<string, string>>> = {
+  notes: {
+    "Clean notes": "Clean these up into clear, organized notes.",
+    "Structured plan": "Turn these into a clear plan with next steps.",
+    Checklist: "Turn these into a checklist I can work through.",
+    "Meeting summary": "Summarize these meeting notes into decisions and follow-ups.",
+  },
+  research: {
+    "General brief": "Give me a clear briefing on this.",
+    "Meeting prep": "Research this company before my meeting.",
+    "Competitor scan": "Map the main competitors and how they differ.",
+    "Investor view": "Assess this the way an investor would.",
+  },
+  challenge: {
+    Investment: "Pressure-test this investment thesis.",
+    Partnership: "Pressure-test this partnership.",
+    Product: "Pressure-test this product plan.",
+    Hiring: "Pressure-test this hiring decision.",
+    Communication: "Pressure-test this message before I send it.",
+    "Personal decision": "Pressure-test this decision I'm weighing.",
+  },
+};
+
 export function Workspace({ serviceId, taskId, autorun }: { serviceId: ServiceId; taskId?: string; autorun?: boolean }) {
   const service = SERVICES[serviceId];
   const router = useRouter();
@@ -158,6 +185,25 @@ export function Workspace({ serviceId, taskId, autorun }: { serviceId: ServiceId
                       }}
                     />
                   </div>
+
+                  {service.modes && service.modes.length > 0 && !task.goal.trim() && (
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <span className="text-meta text-muted">Common uses:</span>
+                      {service.modes.map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => {
+                            const starter = MODE_STARTERS[service.id]?.[m] ?? m;
+                            update({ goal: starter, title: starter.slice(0, 60) });
+                          }}
+                          className="rounded-chip border border-line bg-surface px-2.5 py-1 text-meta font-medium text-ink hover:bg-ink/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/70"
+                        >
+                          {m}
+                        </button>
+                      ))}
+                    </div>
+                  )}
 
                   <div className="mt-4">
                     <p className="mb-2 text-sm text-muted">Add what you have (optional)</p>
