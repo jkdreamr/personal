@@ -214,6 +214,7 @@ function Studio() {
             context={contextText}
             tone={tone}
             length={length}
+            service="write"
             actions={["write", "continue", "improve"]}
             autoRun={autorun ? "write" : undefined}
             minHeightClass="min-h-[60vh]"

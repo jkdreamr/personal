@@ -105,6 +105,7 @@ export function ArtifactBody({
           onDocChange={onDoc}
           goal={goal}
           context={context}
+          service={artifact.service}
           actions={editorActions}
           minHeightClass="min-h-[340px]"
           placeholder="Edit freely — format with the toolbar, select text and Improve, or Continue from the end…"

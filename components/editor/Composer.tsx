@@ -45,6 +45,7 @@ export function Composer({
   context,
   tone,
   length,
+  service,
   actions = ["continue", "improve"],
   placeholder = "Start writing, or use the actions above…",
   minHeightClass = "min-h-[280px]",
@@ -59,6 +60,8 @@ export function Composer({
   context?: string;
   tone?: string;
   length?: string;
+  /** The service whose document this is (write/notes/proposal/…) — tunes the editorial suggestions. */
+  service?: string;
   actions?: ComposerAction[];
   placeholder?: string;
   minHeightClass?: string;
@@ -327,7 +330,7 @@ export function Composer({
     suggestCtl.current?.abort();
     const c = new AbortController();
     suggestCtl.current = c;
-    const res = await fetchSuggestions({ text, goal, context, tone: tone || undefined, length: length || undefined }, c.signal);
+    const res = await fetchSuggestions({ text, goal, context, service, tone: tone || undefined, length: length || undefined }, c.signal);
     if (c.signal.aborted) return;
     const resolved = resolveInitial(res.suggestions.map((s) => ({ ...s, id: uid(), status: "active" as const })));
     setSuggestions(resolved);
