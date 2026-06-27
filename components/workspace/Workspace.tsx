@@ -246,6 +246,7 @@ export function Workspace({ serviceId, taskId, autorun }: { serviceId: ServiceId
                 editable
                 goal={task.goal}
                 context={task.attachments.map((a) => a.text).filter(Boolean).join("\n\n")}
+                editorActions={service.capabilities.editorContinue ? ["continue", "improve"] : ["improve"]}
               />
             )}
           </div>

@@ -22,6 +22,18 @@ test.describe("Editing + regenerate on every tool (demo mode)", () => {
     await expect(page.getByText(/\d+ words/)).toBeVisible();
   });
 
+  test("structured tools (Verify) offer Improve but not Continue in the editor", async ({ page }) => {
+    await page.goto("/verify");
+    await page.getByRole("textbox").first().fill("Check this claim: we are the only product with real-time sync in the market.");
+    await page.getByRole("button", { name: "Review claims" }).click();
+    await expect(page.locator("article.print-document")).toBeVisible();
+
+    await page.getByRole("button", { name: "Edit" }).click();
+    await expect(page.getByRole("button", { name: "Improve selection" })).toBeVisible();
+    // Verify is a structured analysis — "Continue writing" doesn't fit, so it's not offered.
+    await expect(page.getByRole("button", { name: "Continue", exact: true })).toHaveCount(0);
+  });
+
   test("Regenerate re-runs and keeps the workspace", async ({ page }) => {
     await page.goto("/notes");
     await page.getByRole("textbox").first().fill("Turn these into a plan: call the bank, renew the lease, email the team.");

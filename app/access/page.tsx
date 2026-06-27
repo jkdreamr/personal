@@ -3,7 +3,7 @@
 import * as React from "react";
 import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Anchor } from "lucide-react";
+import { Anchor, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/field";
 
@@ -14,6 +14,7 @@ function AccessForm() {
   const [code, setCode] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
+  const [show, setShow] = React.useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,17 +51,27 @@ function AccessForm() {
       </div>
 
       <Label htmlFor="code">Access code</Label>
-      <Input
-        id="code"
-        type="password"
-        autoFocus
-        autoComplete="off"
-        className="mt-1.5"
-        value={code}
-        onChange={(e) => setCode(e.target.value)}
-        aria-invalid={Boolean(error)}
-        aria-describedby={error ? "code-error" : undefined}
-      />
+      <div className="relative mt-1.5">
+        <Input
+          id="code"
+          type={show ? "text" : "password"}
+          autoFocus
+          autoComplete="off"
+          className="pr-10"
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? "code-error" : undefined}
+        />
+        <button
+          type="button"
+          onClick={() => setShow((s) => !s)}
+          aria-label={show ? "Hide code" : "Show code"}
+          className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1.5 text-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/70"
+        >
+          {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+        </button>
+      </div>
       {error && (
         <p id="code-error" role="alert" className="mt-2 text-sm text-danger">
           {error}

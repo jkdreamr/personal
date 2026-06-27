@@ -25,6 +25,7 @@ export function ArtifactBody({
   editable,
   goal,
   context,
+  editorActions = ["continue", "improve"],
 }: {
   artifact: Artifact;
   editedBody?: string;
@@ -32,6 +33,7 @@ export function ArtifactBody({
   editable: boolean;
   goal?: string;
   context?: string;
+  editorActions?: ("continue" | "improve")[];
 }) {
   const [editing, setEditing] = React.useState(false);
   const { toast } = useToast();
@@ -74,7 +76,7 @@ export function ArtifactBody({
           onChange={onEditBody}
           goal={goal}
           context={context}
-          actions={["continue", "improve"]}
+          actions={editorActions}
           minHeightClass="min-h-[340px]"
           placeholder="Edit freely — type for suggestions, select text and Improve, or Continue from the end…"
         />

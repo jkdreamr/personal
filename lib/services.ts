@@ -57,6 +57,9 @@ export type ServiceConfig = {
     sensitive: boolean;
     /** Offer the Editorial Pass action. */
     editorial: boolean;
+    /** Show "Continue writing" in the editor (prose services where extending the text fits).
+     *  "Improve selection" is offered everywhere; Continue only where appending prose makes sense. */
+    editorContinue: boolean;
   };
 };
 
@@ -76,6 +79,7 @@ const base = {
   producesClaims: false,
   sensitive: false,
   editorial: false,
+  editorContinue: false,
 };
 
 export const SERVICES: Record<ServiceId, ServiceConfig> = {
@@ -93,7 +97,7 @@ export const SERVICES: Record<ServiceId, ServiceConfig> = {
     },
     model: "primary",
     refinements: ["Make it shorter", "Make it more direct", "Make it warmer", "Add evidence", "Turn this into an email"],
-    capabilities: { ...base, producesEmail: true, editorial: true },
+    capabilities: { ...base, producesEmail: true, editorial: true, editorContinue: true },
   },
   notes: {
     id: "notes",
@@ -110,7 +114,7 @@ export const SERVICES: Record<ServiceId, ServiceConfig> = {
     model: "fast",
     refinements: ["Make a checklist", "Make it a plan", "Pull out decisions", "Make it shorter"],
     modes: ["Clean notes", "Structured plan", "Checklist", "Meeting summary"],
-    capabilities: { ...base },
+    capabilities: { ...base, editorContinue: true },
   },
   present: {
     id: "present",
@@ -142,7 +146,7 @@ export const SERVICES: Record<ServiceId, ServiceConfig> = {
     },
     model: "primary",
     refinements: ["Tighten scope", "Add a timeline", "Add pricing structure", "Draft the cover email"],
-    capabilities: { ...base, usesResearch: true, producesEmail: true, editorial: true },
+    capabilities: { ...base, usesResearch: true, producesEmail: true, editorial: true, editorContinue: true },
   },
   research: {
     id: "research",
@@ -224,7 +228,7 @@ export const SERVICES: Record<ServiceId, ServiceConfig> = {
     },
     model: "primary",
     refinements: ["Shorter", "Add risks", "Add next steps", "Read-in-60-seconds"],
-    capabilities: { ...base, usesResearch: true, producesClaims: true, editorial: true },
+    capabilities: { ...base, usesResearch: true, producesClaims: true, editorial: true, editorContinue: true },
   },
   meeting: {
     id: "meeting",
@@ -240,7 +244,7 @@ export const SERVICES: Record<ServiceId, ServiceConfig> = {
     },
     model: "primary",
     refinements: ["Questions to ask", "Likely concerns", "Talking points", "Follow-up email"],
-    capabilities: { ...base, usesResearch: true, producesEmail: true, editorial: true },
+    capabilities: { ...base, usesResearch: true, producesEmail: true, editorial: true, editorContinue: true },
   },
   decide: {
     id: "decide",
@@ -272,7 +276,7 @@ export const SERVICES: Record<ServiceId, ServiceConfig> = {
     },
     model: "primary",
     refinements: ["What do I need to do", "Important dates", "What to ask a professional", "Shorter"],
-    capabilities: { ...base, sensitive: true },
+    capabilities: { ...base, sensitive: true, editorContinue: true },
   },
 };
 
