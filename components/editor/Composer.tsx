@@ -104,7 +104,10 @@ export function Composer({
   const requestGhost = React.useCallback(
     async (val: string) => {
       const ta = taRef.current;
-      const caretAtEnd = ta ? ta.selectionStart === val.length && ta.selectionEnd === val.length : false;
+      // Only when the editor is focused and the caret sits at the very end (don't surface a ghost
+      // in an editor the user has clicked away from, or mid-text).
+      if (!ta || (typeof document !== "undefined" && document.activeElement !== ta)) return;
+      const caretAtEnd = ta.selectionStart === val.length && ta.selectionEnd === val.length;
       if (!caretAtEnd || streamingRef.current || val.trim().length < 10) return;
       ghostCtl.current?.abort();
       const ctl = new AbortController();
