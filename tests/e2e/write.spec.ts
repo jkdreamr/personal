@@ -79,6 +79,26 @@ test.describe("Write studio (demo mode)", () => {
     await expect(editor.locator("ul ul")).toHaveCount(1);
   });
 
+  test("typing $...$ and $$...$$ renders math (KaTeX), invalid degrades gracefully", async ({ page }) => {
+    await page.goto("/write");
+    const editor = page.getByRole("textbox", { name: "Document editor" });
+    await editor.click();
+    // Inline math, mid-line.
+    await page.keyboard.type("Euler ");
+    await page.keyboard.type("$e^{i\\pi}+1=0$");
+    await expect(editor.locator(".katex").first()).toBeVisible({ timeout: 4000 });
+    await expect(editor).not.toContainText("$e^{i"); // the literal $...$ was converted
+    // Display math on its own line.
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("$$\\int_0^1 x\\,dx$$");
+    await expect(editor.locator(".katex")).toHaveCount(2, { timeout: 4000 });
+    // Invalid LaTeX must not crash the editor (KaTeX throwOnError:false renders, editor stays usable).
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("$\\frac{1}{$");
+    await page.keyboard.type(" still typing");
+    await expect(editor).toContainText("still typing");
+  });
+
   test("writing font selection applies and persists after refresh", async ({ page }) => {
     await page.goto("/write");
     const editor = page.getByRole("textbox", { name: "Document editor" });

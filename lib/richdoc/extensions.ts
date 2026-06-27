@@ -10,9 +10,36 @@ import TaskItem from "@tiptap/extension-task-item";
 import Placeholder from "@tiptap/extension-placeholder";
 import { InlineMath, BlockMath } from "@tiptap/extension-mathematics";
 import { Markdown } from "tiptap-markdown";
-import type { Extensions } from "@tiptap/core";
+import { nodeInputRule, type Extensions } from "@tiptap/core";
 import { ImproveHighlight } from "./improve-highlight";
 import { GhostText } from "./ghost-text";
+
+// The bundled math input rules are anchored to the start of a block, so `$x$` typed mid-line (or
+// even at line start, fragilely) never converts. Replace them with rules that fire anywhere:
+// inline `$…$` (opening `$` not preceded by another `$`, so it won't grab the first `$` of `$$`),
+// and display `$$…$$`. The KaTeX node view is inherited, so rendering + graceful fallback are kept.
+const InlineMathTyped = InlineMath.extend({
+  addInputRules() {
+    return [
+      nodeInputRule({
+        find: /(?<!\$)\$([^$\n]+?)\$$/,
+        type: this.type,
+        getAttributes: (m) => ({ latex: (m[1] ?? "").trim() }),
+      }),
+    ];
+  },
+});
+const BlockMathTyped = BlockMath.extend({
+  addInputRules() {
+    return [
+      nodeInputRule({
+        find: /^\$\$([^$\n]+?)\$\$$/,
+        type: this.type,
+        getAttributes: (m) => ({ latex: (m[1] ?? "").trim() }),
+      }),
+    ];
+  },
+});
 
 export type RichDocExtensionOptions = {
   /** Placeholder text shown in an empty editor. */
@@ -36,8 +63,8 @@ export function richDocExtensions(opts: RichDocExtensionOptions = {}): Extension
     TaskItem.configure({ nested: true }),
     // Inline `$...$` and display `$$...$$` math via KaTeX. throwOnError:false renders invalid LaTeX
     // inline (in red) instead of crashing the document — graceful degradation, never a hard error.
-    InlineMath.configure({ katexOptions: { throwOnError: false } }),
-    BlockMath.configure({ katexOptions: { throwOnError: false } }),
+    InlineMathTyped.configure({ katexOptions: { throwOnError: false } }),
+    BlockMathTyped.configure({ katexOptions: { throwOnError: false } }),
     // Markdown paste conversion; html:false blocks raw HTML injection from pasted/loaded content.
     Markdown.configure({ html: false, transformPastedText: true, transformCopiedText: false, breaks: false }),
     Placeholder.configure({ placeholder: opts.placeholder ?? "Start writing…" }),
