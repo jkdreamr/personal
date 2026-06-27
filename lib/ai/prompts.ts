@@ -2,6 +2,7 @@ import type { ServiceId, ServiceConfig } from "@/lib/services";
 import { SERVICES } from "@/lib/services";
 import type { Adjustments, Attachment, Source, VoiceProfile } from "@/lib/types";
 import type { ChatMessage } from "./openrouter-client";
+import { hasLengthConstraint, lengthInstruction } from "./constraints";
 
 /**
  * Prompt construction. Two hard rules are baked into every system prompt:
@@ -81,10 +82,11 @@ function voiceBlock(profile?: VoiceProfile | null): string {
   return parts.join("\n");
 }
 
-function adjustmentBlock(adj: Adjustments): string {
+function adjustmentBlock(adj: Adjustments, explicitLength: boolean): string {
   const lines: string[] = [];
   if (adj.tone) lines.push(`Tone: ${adj.tone}`);
-  if (adj.length) lines.push(`Length: ${adj.length}`);
+  // An explicit user count ("300 words") overrides the coarse hint — don't state both.
+  if (adj.length && !explicitLength) lines.push(`Length: ${adj.length}`);
   if (adj.style) lines.push(`Style: ${adj.style}`);
   if (adj.confidence) lines.push(`Confidence: ${adj.confidence}`);
   if (adj.audience) lines.push(`Audience: ${adj.audience}`);
@@ -117,7 +119,13 @@ export function buildContext(opts: {
 
   blocks.push(`TASK: ${goal || "(no sentence provided — infer a sensible default and state it as an assumption)"}`);
 
-  const adj = adjustmentBlock(adjustments);
+  // Honor explicit length/format requests ("300 words", "3 paragraphs", "5 bullets", "8–10 slides")
+  // exactly — stated forcefully and right after the task so it can't be missed.
+  const explicitLength = hasLengthConstraint(goal, adjustments.instruction);
+  const lenReq = lengthInstruction(goal, adjustments.instruction);
+  if (lenReq) blocks.push(lenReq);
+
+  const adj = adjustmentBlock(adjustments, explicitLength);
   if (adj) blocks.push(adj);
 
   if (service.capabilities.editorial) blocks.push(EDITORIAL_REMINDER);
