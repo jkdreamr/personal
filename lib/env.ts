@@ -1,0 +1,66 @@
+/**
+ * Server-side environment access + validation.
+ *
+ * Never import this from a client component. Public values live under NEXT_PUBLIC_*.
+ */
+
+function num(value: string | undefined, fallback: number): number {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+function bool(value: string | undefined, fallback: boolean): boolean {
+  if (value == null) return fallback;
+  return value === "true" || value === "1";
+}
+
+export const serverEnv = {
+  openRouterKey: process.env.OPENROUTER_API_KEY?.trim() || "",
+  betaAccessCode: process.env.BETA_ACCESS_CODE?.trim() || "",
+  betaSessionSecret: process.env.BETA_SESSION_SECRET?.trim() || "",
+  betaGateEnabled: bool(process.env.BETA_GATE_ENABLED, true),
+  freeDailyTaskBudget: num(process.env.FREE_DAILY_TASK_BUDGET, 15),
+  maxFileSizeMb: num(process.env.MAX_FILE_SIZE_MB, 10),
+  maxAttachmentsPerTask: num(process.env.MAX_ATTACHMENTS_PER_TASK, 6),
+  maxUrlPages: num(process.env.MAX_URL_PAGES, 12),
+  searchProvider: process.env.SEARCH_PROVIDER?.trim() || "none",
+  // Demo mode is on when explicitly requested OR when no key is configured.
+  forceDemo: bool(process.env.NEXT_PUBLIC_DEMO_MODE, false),
+} as const;
+
+/** True when Harbor should run without calling external models. */
+export function isDemoMode(): boolean {
+  return serverEnv.forceDemo || serverEnv.openRouterKey.length === 0;
+}
+
+/**
+ * Validate the environment. Returns problems rather than throwing so the app can
+ * surface a clear message instead of a stack trace. In production a weak session
+ * secret or a missing access code (when the gate is on) are hard errors.
+ */
+export function validateServerEnv(): { ok: boolean; errors: string[]; warnings: string[] } {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const isProd = process.env.NODE_ENV === "production";
+
+  if (serverEnv.betaGateEnabled) {
+    if (!serverEnv.betaAccessCode) {
+      errors.push("BETA_ACCESS_CODE is required when BETA_GATE_ENABLED=true.");
+    }
+    if (!serverEnv.betaSessionSecret) {
+      errors.push("BETA_SESSION_SECRET is required when BETA_GATE_ENABLED=true.");
+    } else if (serverEnv.betaSessionSecret.length < 32) {
+      const msg = "BETA_SESSION_SECRET should be at least 32 characters.";
+      if (isProd) errors.push(msg);
+      else warnings.push(msg);
+    } else if (/change-me|dev-only|insecure/i.test(serverEnv.betaSessionSecret) && isProd) {
+      errors.push("BETA_SESSION_SECRET still uses the example value. Set a strong secret in production.");
+    }
+  }
+
+  if (!serverEnv.openRouterKey && !serverEnv.forceDemo) {
+    warnings.push("OPENROUTER_API_KEY is not set — Harbor is running in demo mode.");
+  }
+
+  return { ok: errors.length === 0, errors, warnings };
+}

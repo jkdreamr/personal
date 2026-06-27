@@ -1,0 +1,108 @@
+import { serverEnv } from "@/lib/env";
+
+/**
+ * Minimal OpenRouter chat-completions client. Server-side only.
+ * The API key never leaves the server. Uses the OpenAI-compatible path.
+ */
+
+const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+
+export type ChatMessage = {
+  role: "system" | "user" | "assistant";
+  content: string;
+};
+
+export type ChatRequest = {
+  model: string;
+  messages: ChatMessage[];
+  temperature?: number;
+  maxTokens?: number;
+  /** Only sent when the model is known to support it. */
+  jsonMode?: boolean;
+  signal?: AbortSignal;
+  timeoutMs?: number;
+};
+
+export class ProviderError extends Error {
+  status: number;
+  retryable: boolean;
+  constructor(message: string, status: number, retryable: boolean) {
+    super(message);
+    this.name = "ProviderError";
+    this.status = status;
+    this.retryable = retryable;
+  }
+}
+
+function isRetryableStatus(status: number): boolean {
+  return status === 408 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+}
+
+/**
+ * Single chat completion. Returns the assistant message text.
+ * Throws ProviderError on failure (with a retryable flag for transient cases).
+ */
+export async function chatComplete(req: ChatRequest): Promise<string> {
+  if (!serverEnv.openRouterKey) {
+    throw new ProviderError("No OpenRouter key configured.", 500, false);
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), req.timeoutMs ?? 45_000);
+  // Chain an externally-provided signal (e.g. user cancellation).
+  if (req.signal) {
+    if (req.signal.aborted) controller.abort();
+    else req.signal.addEventListener("abort", () => controller.abort(), { once: true });
+  }
+
+  const body: Record<string, unknown> = {
+    model: req.model,
+    messages: req.messages,
+    temperature: req.temperature ?? 0.4,
+    max_tokens: req.maxTokens ?? 2400,
+  };
+  if (req.jsonMode) {
+    body.response_format = { type: "json_object" };
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(OPENROUTER_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${serverEnv.openRouterKey}`,
+        "Content-Type": "application/json",
+        // Optional attribution headers per OpenRouter docs.
+        "HTTP-Referer": "https://harbor.app",
+        "X-Title": "Harbor",
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    clearTimeout(timeout);
+    const aborted = err instanceof Error && err.name === "AbortError";
+    throw new ProviderError(aborted ? "The request was cancelled or timed out." : "Could not reach the model provider.", 503, !aborted);
+  }
+  clearTimeout(timeout);
+
+  if (!res.ok) {
+    let detail = "";
+    try {
+      const j = await res.json();
+      detail = j?.error?.message ?? "";
+    } catch {
+      /* ignore */
+    }
+    throw new ProviderError(detail || `Provider returned ${res.status}.`, res.status, isRetryableStatus(res.status));
+  }
+
+  const data = (await res.json()) as {
+    choices?: { message?: { content?: string } }[];
+  };
+  const content = data?.choices?.[0]?.message?.content;
+  if (!content || typeof content !== "string") {
+    throw new ProviderError("The model returned an empty response.", 502, true);
+  }
+  return content;
+}

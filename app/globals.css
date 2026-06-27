@@ -1,0 +1,178 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Harbor fixed palette */
+  --harbor-canvas: #f7f7f7;
+  --harbor-surface: #eeeeee;
+  --harbor-ink: #393e46;
+  /* Brand muted swatch (#929AAB) is retained for decorative/inactive tints, but it only
+     reaches 2.63:1 on the canvas — below WCAG AA. For text we use a darker member of the
+     same slate-blue family so all secondary text is legible (≈5.5:1 on canvas, ≈5.1:1 on
+     surface). This satisfies the spec's own "remove low-contrast text" requirement. */
+  --harbor-muted: #5c6573;
+  --harbor-muted-soft: #929aab;
+
+  /* Semantic — used sparingly, always paired with a label/icon. AA on canvas. */
+  --harbor-success: #2f6f57;
+  --harbor-warning: #8a5a1f;
+  --harbor-danger: #9a3b36;
+
+  /* Hairline borders derived from ink so structure stays calm. */
+  --harbor-line: rgb(57 62 70 / 0.12);
+}
+
+@layer base {
+  * {
+    border-color: var(--harbor-line);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    background-color: var(--harbor-canvas);
+    color: var(--harbor-ink);
+    font-feature-settings: "kern", "liga", "calt";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Tabular figures for data, budgets, dates. */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Always-visible, never-removed focus treatment. */
+  :where(a, button, input, textarea, select, [tabindex], [role="button"]):focus-visible {
+    outline: 2px solid var(--harbor-ink);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::selection {
+    background: rgb(57 62 70 / 0.16);
+  }
+
+  /* Comfortable, calm scrollbars. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--harbor-muted) transparent;
+  }
+}
+
+@layer components {
+  /* Hidden on screen; revealed by the print stylesheet to make a self-contained document. */
+  .print-only {
+    display: none;
+  }
+
+  /* Editorial prose used for generated artifacts. Restrained, readable. */
+  .prose-harbor {
+    color: var(--harbor-ink);
+    font-size: 1rem;
+    line-height: 1.65;
+  }
+  .prose-harbor > * + * {
+    margin-top: 0.85rem;
+  }
+  .prose-harbor h1,
+  .prose-harbor h2,
+  .prose-harbor h3 {
+    font-weight: 600;
+    line-height: 1.3;
+    margin-top: 1.6rem;
+  }
+  .prose-harbor h2 {
+    font-size: 1.25rem;
+  }
+  .prose-harbor h3 {
+    font-size: 1.05rem;
+  }
+  .prose-harbor ul,
+  .prose-harbor ol {
+    padding-left: 1.25rem;
+  }
+  .prose-harbor ul {
+    list-style: disc;
+  }
+  .prose-harbor ol {
+    list-style: decimal;
+  }
+  .prose-harbor li + li {
+    margin-top: 0.3rem;
+  }
+  .prose-harbor strong {
+    font-weight: 600;
+  }
+  .prose-harbor a {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .prose-harbor blockquote {
+    border-left: 3px solid var(--harbor-line);
+    padding-left: 0.9rem;
+    color: rgb(57 62 70 / 0.82);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---- Print: clean document, never an app screenshot ---- */
+@media print {
+  @page {
+    margin: 18mm 16mm;
+  }
+  html,
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  /* Hide all app chrome; only .print-document is shown. */
+  body * {
+    visibility: hidden;
+  }
+  .print-document,
+  .print-document * {
+    visibility: visible;
+  }
+  .print-document {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    padding: 0;
+  }
+  .no-print {
+    display: none !important;
+  }
+  /* Appendix blocks that only appear in the printed document. */
+  .print-only {
+    display: block !important;
+  }
+  .print-document h1,
+  .print-document h2,
+  .print-document h3 {
+    page-break-after: avoid;
+  }
+  .print-document table,
+  .print-document tr,
+  .print-document .avoid-break {
+    page-break-inside: avoid;
+  }
+  .print-document a {
+    color: #000;
+    text-decoration: underline;
+  }
+}
