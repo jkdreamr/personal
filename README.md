@@ -130,11 +130,18 @@ correct code lets you in), and at least one non-demo route returns a real, sourc
 - **PPTX export is intentionally not shipped** (it isn't verified end-to-end). Presentations support
   an in-browser present mode, print-to-PDF, and outline/notes copy instead.
 
-## Write studio (live writing)
+## Live editing on every tool
 
-`/write` is a cursor-style writing surface: type freely with **ghost-text autocomplete** (Tab to
-accept, Esc to dismiss), **live editorial hints** (local, instant), and streaming **Auto-write /
-Continue / Improve selection** actions. Generation **streams** token-by-token (`/api/compose`,
-SSE from OpenRouter) so the draft appears as it's written rather than after a long wait — the
-biggest perceived-speed win. In demo mode the studio streams a locally-built draft and a light
-heuristic ghost suggestion, so the whole experience is testable without a key.
+`/write` is a cursor-style writing surface, and the same editor (`components/editor/Composer.tsx`)
+powers the **Edit** mode of every other tool. Anywhere you have a result you can: type freely with
+**ghost-text autocomplete** (Tab accept, Esc dismiss), see **live editorial hints** (local, instant),
+**Continue** from the end, **Improve selection**, and **Regenerate** the whole thing or refine it.
+Generation **streams** token-by-token (`/api/compose`, SSE) so text appears as it's written. In demo
+mode the editor streams a locally-built draft + heuristic ghost, so it's fully testable without a key.
+
+## Cost — everything is free
+
+Harbor must never incur per-token cost. All models are zero-priced on OpenRouter (`owl-alpha` is a
+free stealth model; the others are `:free` variants), and a hard guard (`assertFreeModel`) refuses to
+call anything else. Web search uses key-less **Wikipedia** by default, or **Brave**'s free tier if you
+add `BRAVE_SEARCH_API_KEY`. No paid APIs, databases, search, or analytics anywhere.

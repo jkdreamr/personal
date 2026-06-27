@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ChevronDown, FileText, Link2, Type, X, AlertTriangle } from "lucide-react";
+import { ChevronDown, FileText, Link2, Type, X, AlertTriangle, RotateCw } from "lucide-react";
 import type { Adjustments, Artifact, Attachment } from "@/lib/types";
 import type { ServiceConfig } from "@/lib/services";
 import { Badge, Eyebrow } from "@/components/ui/primitives";
@@ -198,6 +198,9 @@ export function ContextPanel({
       {hasResult && (
         <section>
           <Eyebrow>Refine</Eyebrow>
+          <Button variant="secondary" size="sm" className="mt-2 w-full" onClick={onApplyAdjustments} disabled={running}>
+            <RotateCw className="h-4 w-4" /> Regenerate
+          </Button>
           <div className="mt-2 flex flex-wrap gap-2">
             {quickRefinements.map((r) => (
               <button

@@ -19,6 +19,23 @@ export const MODELS = {
 
 export type ModelId = (typeof MODELS)[keyof typeof MODELS];
 
+/**
+ * Hard money safeguard. Harbor must NEVER incur per-token cost. Only the exact free models in
+ * MODELS may be called (all verified $0 on OpenRouter: owl-alpha is a free stealth model; the
+ * `:free` variants are zero-priced). A `:free` suffix is also accepted defensively.
+ */
+const FREE_ALLOWLIST: ReadonlySet<string> = new Set<string>(Object.values(MODELS));
+
+export function isFreeModel(id: string): boolean {
+  return FREE_ALLOWLIST.has(id) || id.endsWith(":free");
+}
+
+export function assertFreeModel(id: string): void {
+  if (!isFreeModel(id)) {
+    throw new Error(`Refusing to call non-free model "${id}". Harbor only uses zero-cost models.`);
+  }
+}
+
 export type TaskKind =
   | "synthesis" // full service generation — always Owl
   | "rewrite" // short refinement

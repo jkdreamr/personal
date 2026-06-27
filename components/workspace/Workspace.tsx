@@ -243,7 +243,9 @@ export function Workspace({ serviceId, taskId, autorun }: { serviceId: ServiceId
                 artifact={task.artifact}
                 editedBody={task.editedBody}
                 onEditBody={(body) => update({ editedBody: body })}
-                editable={service.capabilities.editorial || serviceId === "notes" || serviceId === "explain"}
+                editable
+                goal={task.goal}
+                context={task.attachments.map((a) => a.text).filter(Boolean).join("\n\n")}
               />
             )}
           </div>

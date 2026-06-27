@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { MODELS, routeModel, fallbackChain } from "@/lib/ai/model-router";
+import { MODELS, routeModel, fallbackChain, isFreeModel, assertFreeModel } from "@/lib/ai/model-router";
 import { getCapabilities, __resetCapabilityCache } from "@/lib/ai/provider-capabilities";
 
 describe("model routing", () => {
@@ -21,6 +21,17 @@ describe("model routing", () => {
     const ids = Object.values(MODELS);
     expect(ids).not.toContain("openrouter/auto");
     expect(ids.every((m) => m.includes(":free") || m === "openrouter/owl-alpha")).toBe(true);
+  });
+  it("the free-model guard accepts our models and rejects paid ones", () => {
+    for (const m of Object.values(MODELS)) {
+      expect(isFreeModel(m)).toBe(true);
+      expect(() => assertFreeModel(m)).not.toThrow();
+    }
+    expect(isFreeModel("openai/gpt-4o")).toBe(false);
+    expect(isFreeModel("anthropic/claude-3.5-sonnet")).toBe(false);
+    expect(() => assertFreeModel("openai/gpt-4o")).toThrow(/non-free/);
+    // a `:free` variant is accepted defensively
+    expect(isFreeModel("deepseek/deepseek-r1:free")).toBe(true);
   });
   it("includes Laguna in the map but never auto-uses it (disabled by default)", () => {
     expect(MODELS.restricted).toBe("poolside/laguna-m.1:free");

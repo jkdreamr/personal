@@ -5,10 +5,10 @@ import { Info, Pencil, Check } from "lucide-react";
 import type { Artifact } from "@/lib/types";
 import { Badge } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/field";
 import { SafeMarkdown } from "./SafeMarkdown";
 import { SlideDeck } from "./SlideDeck";
 import { ComparisonView } from "./ComparisonView";
+import { Composer } from "@/components/editor/Composer";
 import { copyToClipboard } from "@/lib/client/download";
 import { useToast } from "@/components/ui/toast";
 import { CLAIM_LABELS } from "@/lib/research/citation-builder";
@@ -23,11 +23,15 @@ export function ArtifactBody({
   editedBody,
   onEditBody,
   editable,
+  goal,
+  context,
 }: {
   artifact: Artifact;
   editedBody?: string;
   onEditBody: (body: string) => void;
   editable: boolean;
+  goal?: string;
+  context?: string;
 }) {
   const [editing, setEditing] = React.useState(false);
   const { toast } = useToast();
@@ -65,11 +69,14 @@ export function ArtifactBody({
       )}
 
       {editing ? (
-        <Textarea
-          aria-label="Edit draft"
-          className="min-h-[320px] font-sans"
+        <Composer
           value={bodyMarkdown}
-          onChange={(e) => onEditBody(e.target.value)}
+          onChange={onEditBody}
+          goal={goal}
+          context={context}
+          actions={["continue", "improve"]}
+          minHeightClass="min-h-[340px]"
+          placeholder="Edit freely — type for suggestions, select text and Improve, or Continue from the end…"
         />
       ) : (
         <SafeMarkdown text={bodyMarkdown} className="prose-harbor" />

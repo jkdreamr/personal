@@ -1,4 +1,5 @@
 import { serverEnv } from "@/lib/env";
+import { assertFreeModel } from "./model-router";
 
 /**
  * Minimal OpenRouter chat-completions client. Server-side only.
@@ -48,6 +49,7 @@ export async function chatComplete(req: ChatRequest): Promise<string> {
   if (!serverEnv.openRouterKey) {
     throw new ProviderError("No OpenRouter key configured.", 500, false);
   }
+  assertFreeModel(req.model); // hard guard: never incur per-token cost
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), req.timeoutMs ?? 45_000);
@@ -122,6 +124,7 @@ export async function chatCompleteStream(req: ChatRequest, onDelta: (text: strin
   if (!serverEnv.openRouterKey) {
     throw new ProviderError("No OpenRouter key configured.", 500, false);
   }
+  assertFreeModel(req.model); // hard guard: never incur per-token cost
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), req.timeoutMs ?? 60_000);
