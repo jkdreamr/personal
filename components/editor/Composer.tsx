@@ -77,6 +77,7 @@ export function Composer({
     const t = docToText(seedDoc).trim();
     return t ? t.split(/\s+/).length : 0;
   });
+  const [selectedWords, setSelectedWords] = React.useState(0);
 
   // Improve-selection panel state.
   const [improveOpen, setImproveOpen] = React.useState(false);
@@ -132,6 +133,21 @@ export function Composer({
 
   // Cursor-anchored ghost autocomplete (paused while a stream is running).
   useGhostText(editorInstance, { goal, enabled: !streaming });
+
+  // Live word count of the current selection (shown in the status line).
+  React.useEffect(() => {
+    if (!editorInstance) return;
+    const onSel = () => {
+      const { from, to, empty } = editorInstance.state.selection;
+      if (empty) return setSelectedWords(0);
+      const text = editorInstance.state.doc.textBetween(from, to, " ", " ").trim();
+      setSelectedWords(text ? text.split(/\s+/).length : 0);
+    };
+    editorInstance.on("selectionUpdate", onSel);
+    return () => {
+      editorInstance.off("selectionUpdate", onSel);
+    };
+  }, [editorInstance]);
 
   // ---- streaming Write / Continue / Improve --------------------------------
 
@@ -373,7 +389,9 @@ export function Composer({
           </span>
         ) : (
           <>
-            <span className="text-meta text-muted tnum">{wordCount} words</span>
+            <span className="text-meta text-muted tnum">
+              {selectedWords > 0 ? `${selectedWords} of ${wordCount} words selected` : `${wordCount} words`}
+            </span>
             {hints.length > 0 && (
               <Popover>
                 <PopoverTrigger asChild>

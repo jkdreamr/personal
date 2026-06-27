@@ -3,14 +3,14 @@
 import * as React from "react";
 import type { Editor } from "@tiptap/react";
 import { fetchGhost } from "@/lib/client/compose";
-import { currentGhost } from "@/lib/richdoc/ghost-text";
 
 /**
- * Drives cursor-anchored ghost autocomplete for a Tiptap editor: a short idle debounce plus a calm
- * heartbeat request a continuation for the current block up to the caret, then show it as a ghost
- * decoration. Stale requests are aborted; suggestions are suppressed during IME composition, text
- * selection, code/math nodes, and while disabled (e.g. another stream is running). Failures are
- * silent — autocomplete being unavailable never surfaces an error.
+ * Cursor-anchored ghost autocomplete — tuned to be quiet. It only offers a continuation at a natural
+ * pause: when the caret is at the END of its block and the user has just finished a word (a trailing
+ * space), with enough preceding context. It does NOT fire mid-word, on cursor moves, or on a periodic
+ * timer — so it stops nagging — but a short debounce keeps it quick when a suggestion does make sense.
+ * Suppressed during IME composition, selection, code/math nodes, blur, and while disabled. Stale
+ * requests abort; failures are silent.
  */
 export function useGhostText(editor: Editor | null, opts: { goal?: string; enabled: boolean }) {
   const ctl = React.useRef<AbortController | null>(null);
@@ -25,14 +25,20 @@ export function useGhostText(editor: Editor | null, opts: { goal?: string; enabl
     const { selection } = editor.state;
     if (!selection.empty) return;
     if (editor.isActive("codeBlock") || editor.isActive("inlineMath") || editor.isActive("blockMath")) return;
-    const blockStart = selection.$head.start();
-    const before = editor.state.doc.textBetween(blockStart, selection.head, "\n", " ");
-    if (before.trim().length < 12) return;
+
+    const { $head, head } = selection;
+    // Only when appending at the end of the current block (never mid-paragraph).
+    if (head !== $head.end()) return;
+    const before = editor.state.doc.textBetween($head.start(), head, "\n", " ");
+    if (before.trim().length < 15) return;
+    // Only right after a finished word — a trailing space — so it never interrupts mid-word and only
+    // shows up at a sensible "what comes next" moment.
+    if (!/\s$/.test(before)) return;
 
     ctl.current?.abort();
     const c = new AbortController();
     ctl.current = c;
-    const headAtRequest = selection.head;
+    const headAtRequest = head;
     fetchGhost(before, goalRef.current, c.signal)
       .then((s) => {
         if (c.signal.aborted || !s || !editor || editor.view.composing) return;
@@ -45,28 +51,20 @@ export function useGhostText(editor: Editor | null, opts: { goal?: string; enabl
 
   const schedule = React.useCallback(() => {
     if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(request, 650);
+    timer.current = setTimeout(request, 380);
   }, [request]);
 
   React.useEffect(() => {
     if (!editor) return;
-    const onUpdate = () => schedule(); // typing already cleared the ghost; queue a fresh one
-    const onSelect = () => schedule();
+    const onUpdate = () => schedule(); // only typing queues a suggestion; cursor moves do not
     const onBlur = () => editor.commands.clearGhostText();
     editor.on("update", onUpdate);
-    editor.on("selectionUpdate", onSelect);
     editor.on("blur", onBlur);
-    // Keep offering a fresh continuation during sustained writing, without nagging.
-    const heartbeat = setInterval(() => {
-      if (editor.isFocused && !currentGhost(editor.state)) request();
-    }, 9000);
     return () => {
       editor.off("update", onUpdate);
-      editor.off("selectionUpdate", onSelect);
       editor.off("blur", onBlur);
-      clearInterval(heartbeat);
       ctl.current?.abort();
       if (timer.current) clearTimeout(timer.current);
     };
-  }, [editor, schedule, request]);
+  }, [editor, schedule]);
 }

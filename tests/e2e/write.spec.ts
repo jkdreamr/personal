@@ -49,22 +49,34 @@ test.describe("Write studio (demo mode)", () => {
     await expect(editor.locator("ul li")).toHaveCount(1);
   });
 
-  test("cursor-anchored autocomplete: ghost appears mid-writing, Tab accepts, Esc dismisses", async ({ page }) => {
+  test("cursor-anchored autocomplete: fires at a pause, Tab accepts, Esc dismisses", async ({ page }) => {
     await page.goto("/write");
     const editor = page.getByRole("textbox", { name: "Document editor" });
     await editor.click();
-    await page.keyboard.type("Here is a quick note to the whole team and");
-    // A grey ghost suggestion appears at the caret (demo provides a deterministic continuation).
+    // Mid-word there is no suggestion (it must not nag while typing a word).
+    await page.keyboard.type("Here is a quick note to the whole team an");
+    await expect(editor.locator(".rd-ghost-text")).toHaveCount(0);
+    // Finishing the word + a space is the natural pause where a suggestion appears.
+    await page.keyboard.type("d ");
     await expect(editor.locator(".rd-ghost-text")).toBeVisible({ timeout: 6000 });
     // Tab accepts it.
     await page.keyboard.press("Tab");
     await expect(editor).toContainText("what we should do next.");
     await expect(editor.locator(".rd-ghost-text")).toHaveCount(0);
-    // Type more; a fresh suggestion appears, and Escape dismisses it without inserting.
-    await page.keyboard.type(" We should align on the timing for");
+    // Type more, pause again; a fresh suggestion appears, and Escape dismisses it without inserting.
+    await page.keyboard.type(" We should align on the timing for ");
     await expect(editor.locator(".rd-ghost-text")).toBeVisible({ timeout: 6000 });
     await page.keyboard.press("Escape");
     await expect(editor.locator(".rd-ghost-text")).toHaveCount(0);
+  });
+
+  test("shows the word count of the current selection", async ({ page }) => {
+    await page.goto("/write");
+    const editor = page.getByRole("textbox", { name: "Document editor" });
+    await editor.click();
+    await page.keyboard.type("alpha beta gamma delta");
+    await page.keyboard.press("ControlOrMeta+a");
+    await expect(page.getByText("4 of 4 words selected")).toBeVisible();
   });
 
   test("Tab indents a list when no suggestion is showing", async ({ page }) => {
