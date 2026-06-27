@@ -5,6 +5,9 @@
  */
 
 import { serverEnv } from "@/lib/env";
+import { duckDuckGoAdapter } from "./search-duckduckgo";
+import { wikipediaAdapter } from "./search-wikipedia";
+import { braveAdapter, braveEnabled } from "./search-brave";
 
 export type SearchHit = { url: string; title?: string; snippet?: string };
 
@@ -24,10 +27,18 @@ export const noopSearchAdapter: SearchAdapter = {
 };
 
 export function getSearchAdapter(): SearchAdapter {
-  // Only "none" is wired up in V1. Other providers can be added here behind env config.
   switch (serverEnv.searchProvider) {
     case "none":
-    default:
       return noopSearchAdapter;
+    case "wikipedia":
+      return wikipediaAdapter;
+    case "brave":
+      return braveAdapter;
+    case "duckduckgo":
+      return duckDuckGoAdapter; // explicit opt-in; usually blocked from servers
+    case "auto":
+    default:
+      // Prefer real web search (Brave) when a key is configured; else key-less Wikipedia.
+      return braveEnabled() ? braveAdapter : wikipediaAdapter;
   }
 }

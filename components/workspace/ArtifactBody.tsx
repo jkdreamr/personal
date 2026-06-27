@@ -75,7 +75,7 @@ export function ArtifactBody({
         <SafeMarkdown text={bodyMarkdown} className="prose-harbor" />
       )}
 
-      {artifact.email && (
+      {artifact.email && artifact.email.body?.trim() && (
         <section className="mt-6 rounded-card border border-line bg-surface/50 p-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lead font-semibold text-ink">Email</h2>
@@ -117,7 +117,7 @@ export function ArtifactBody({
         </section>
       )}
 
-      {artifact.comparison && (
+      {artifact.comparison && artifact.comparison.criteria?.length > 0 && (
         <section className="mt-6">
           <h2 className="mb-3 text-lead font-semibold text-ink">Comparison</h2>
           <ComparisonView table={artifact.comparison} />

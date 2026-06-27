@@ -23,7 +23,12 @@ export const serverEnv = {
   maxFileSizeMb: num(process.env.MAX_FILE_SIZE_MB, 10),
   maxAttachmentsPerTask: num(process.env.MAX_ATTACHMENTS_PER_TASK, 6),
   maxUrlPages: num(process.env.MAX_URL_PAGES, 12),
-  searchProvider: process.env.SEARCH_PROVIDER?.trim() || "none",
+  // Web search for research-capable services. "auto" (default) uses Brave when a key is set,
+  // otherwise Wikipedia (key-less). "none" disables web search; "duckduckgo" forces DDG (often
+  // blocked from servers). See lib/research/search-adapter.ts.
+  searchProvider: process.env.SEARCH_PROVIDER?.trim() || "auto",
+  // Optional free Brave Search API key for full-web results.
+  braveSearchKey: process.env.BRAVE_SEARCH_API_KEY?.trim() || "",
   // Owner-only diagnostics. When empty, /diagnostics is disabled entirely.
   diagnosticsToken: process.env.DIAGNOSTICS_TOKEN?.trim() || "",
   // Demo mode is on when explicitly requested OR when no key is configured.

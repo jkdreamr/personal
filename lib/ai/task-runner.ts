@@ -58,6 +58,17 @@ export function normalizeArtifact(raw: ModelArtifact, service: ServiceId, provid
     ? [...providedSources].sort((a, b) => Number(usedSourceIds.has(b.id)) - Number(usedSourceIds.has(a.id)))
     : undefined;
 
+  // Only keep specialized payloads a service is meant to produce, and never empty ones —
+  // otherwise (e.g.) Verify renders a blank "Email" / "Comparison" the model emitted by habit.
+  const caps = SERVICES[service].capabilities;
+  const email =
+    caps.producesEmail && raw.email && raw.email.body && raw.email.body.trim().length > 0 ? raw.email : undefined;
+  const slides = caps.producesSlides && raw.slides && raw.slides.length > 0 ? raw.slides : undefined;
+  const comparison =
+    caps.producesComparison && raw.comparison && raw.comparison.criteria && raw.comparison.criteria.length > 0
+      ? raw.comparison
+      : undefined;
+
   return {
     service,
     title: raw.title?.trim() || `${SERVICES[service].label} draft`,
@@ -70,9 +81,9 @@ export function normalizeArtifact(raw: ModelArtifact, service: ServiceId, provid
     nextActions: raw.nextActions,
     disclaimer: raw.disclaimer,
     coverageNote: raw.coverageNote,
-    email: raw.email,
-    slides: raw.slides,
-    comparison: raw.comparison,
+    email,
+    slides,
+    comparison,
     demo: false,
   };
 }
@@ -162,8 +173,10 @@ export async function runTask(input: RunInput, demo: boolean): Promise<RunResult
       lastError = new ProviderError("The model did not return a usable result.", 502, true);
     } catch (err) {
       lastError = err;
-      // Non-retryable (e.g. auth) or user cancellation: stop immediately.
-      if (err instanceof ProviderError && !err.retryable) {
+      // Only a bad/again-missing API key (auth) or user cancellation is fatal — abort then.
+      // Everything else (model-not-found, bad request, rate limit, 5xx, timeout) falls through
+      // to the next model in the chain, because one flaky model shouldn't kill the whole task.
+      if (err instanceof ProviderError && (err.status === 401 || err.status === 403)) {
         recordCall({ taskType: input.service, model, calls, success: false, rateLimited: false, errorStatus: err.status, tokens: tokens || undefined });
         throw err;
       }

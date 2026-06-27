@@ -6,6 +6,7 @@ import { runTask } from "@/lib/ai/task-runner";
 import { ProviderError } from "@/lib/ai/openrouter-client";
 import { retrieveSources } from "@/lib/research/crawl-domain";
 import { pastedTextSource } from "@/lib/research/source-normalizer";
+import { getSearchAdapter } from "@/lib/research/search-adapter";
 import { COVERAGE_DISCLOSURE } from "@/lib/research/citation-builder";
 import type { Attachment, Source, Stage } from "@/lib/types";
 
@@ -105,25 +106,42 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        if (!demo && usesResearch && linkUrls.length > 0) {
-          completeUpTo("understanding");
-          emitStage("sources", "active");
-          try {
-            const result = await retrieveSources(linkUrls, signal);
-            sources = [...sources, ...result.sources];
-            controller.enqueue(
-              ndjson({
-                type: "sources",
-                sources: result.sources,
-                log: result.log,
-                coverage: COVERAGE_DISCLOSURE,
-              })
-            );
-          } catch {
-            // Retrieval failure should not lose the task — continue without web sources.
-            controller.enqueue(ndjson({ type: "notice", message: "Some links could not be read. Continuing with what Harbor has." }));
+        if (!demo && usesResearch) {
+          // Seed URLs: user-provided links if any; otherwise search the web for the question.
+          let seedUrls = [...linkUrls];
+          let searched = false;
+          if (seedUrls.length === 0 && parsed.goal.trim()) {
+            const adapter = getSearchAdapter();
+            if (adapter.enabled) {
+              completeUpTo("understanding");
+              emitStage("sources", "active");
+              try {
+                const hits = await adapter.search(parsed.goal, signal);
+                seedUrls = hits.slice(0, 6).map((h) => h.url);
+                searched = true;
+              } catch {
+                /* search unavailable — fall through with no seeds */
+              }
+            }
           }
-          completeUpTo("sources");
+
+          if (seedUrls.length > 0) {
+            completeUpTo("understanding");
+            emitStage("sources", "active");
+            try {
+              // One link → same-domain crawl; many (e.g. search results) → fetch each.
+              const result = await retrieveSources(seedUrls, signal);
+              sources = [...sources, ...result.sources];
+              controller.enqueue(ndjson({ type: "sources", sources: result.sources, log: result.log, coverage: COVERAGE_DISCLOSURE }));
+            } catch {
+              controller.enqueue(ndjson({ type: "notice", message: "Some pages could not be read. Continuing with what Harbor has." }));
+            }
+            completeUpTo("sources");
+          } else {
+            if (searched)
+              controller.enqueue(ndjson({ type: "notice", message: "Web search returned nothing usable just now. Add a link or paste text for a stronger result." }));
+            completeUpTo("understanding");
+          }
         } else {
           completeUpTo("understanding");
         }

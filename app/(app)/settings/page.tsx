@@ -19,7 +19,14 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
 
-type Health = { demo: boolean; gateEnabled: boolean; dailyBudget: number; searchProvider: string };
+type Health = { demo: boolean; gateEnabled: boolean; dailyBudget: number; searchProvider: string; search: string };
+
+const SEARCH_LABEL: Record<string, string> = {
+  none: "off",
+  wikipedia: "Wikipedia (key-less). Add a Brave key for full web results.",
+  brave: "Brave (full web)",
+  duckduckgo: "DuckDuckGo (often blocked from servers)",
+};
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -68,8 +75,13 @@ export default function SettingsPage() {
             </div>
             <Badge tone={health?.demo ? "warning" : "success"}>{health?.demo ? "Demo" : "Live"}</Badge>
           </div>
-          {remaining !== null && (
+          {health && (
             <p className="mt-3 border-t border-line pt-3 text-meta text-muted">
+              Web search: <span className="text-ink">{SEARCH_LABEL[health.search] ?? health.search}</span>
+            </p>
+          )}
+          {remaining !== null && (
+            <p className="mt-2 text-meta text-muted">
               Today&apos;s usage: <span className="tnum text-ink">{budget?.used ?? 0}</span> of{" "}
               <span className="tnum">{budget?.limit}</span> tasks. This is a soft daily limit for the free beta.
             </p>

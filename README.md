@@ -64,7 +64,8 @@ Add a key to enable full drafting, research, and web retrieval.
 | `MAX_FILE_SIZE_MB` | no (default `10`) | |
 | `MAX_ATTACHMENTS_PER_TASK` | no (default `6`) | |
 | `MAX_URL_PAGES` | no (default `12`) | Max pages crawled per company site. |
-| `SEARCH_PROVIDER` | no (default `none`) | Broad web search is off by default (no paid provider). |
+| `SEARCH_PROVIDER` | no (default `auto`) | Web search for research services. `auto` = Brave if a key is set, else key-less Wikipedia. Also `none`, `wikipedia`, `brave`. |
+| `BRAVE_SEARCH_API_KEY` | no | Free Brave Search key → full-web results (recommended for niche questions). Without it, Wikipedia search is used. |
 
 Only `NEXT_PUBLIC_*` values reach the browser. `OPENROUTER_API_KEY` never does.
 

@@ -28,11 +28,11 @@ describe("model routing", () => {
     expect(fallbackChain(MODELS.primary)).not.toContain(MODELS.restricted);
     expect(fallbackChain(MODELS.reviewer)).not.toContain(MODELS.restricted);
   });
-  it("fallback is Owl -> GPT-OSS only (no auto-Nemotron for normal tasks)", () => {
+  it("degrades Owl -> GPT-OSS -> Nemotron for resilience (Nemotron last, never first)", () => {
     const chain = fallbackChain(MODELS.primary);
     expect(chain[0]).toBe(MODELS.primary);
-    expect(chain).toContain(MODELS.fast);
-    expect(chain).not.toContain(MODELS.reviewer);
+    expect(chain[1]).toBe(MODELS.fast);
+    expect(chain[chain.length - 1]).toBe(MODELS.reviewer); // last resort only
     expect(new Set(chain).size).toBe(chain.length);
   });
 });

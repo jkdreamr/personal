@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { isDemoMode, serverEnv, validateServerEnv } from "@/lib/env";
+import { getSearchAdapter } from "@/lib/research/search-adapter";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,6 +14,8 @@ export async function GET() {
       gateEnabled: serverEnv.betaGateEnabled,
       dailyBudget: serverEnv.freeDailyTaskBudget,
       searchProvider: serverEnv.searchProvider,
+      // The actual search engine in effect (e.g. "wikipedia", "brave", "none").
+      search: getSearchAdapter().name,
       envOk: env.ok,
       warnings: env.warnings,
     },

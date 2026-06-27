@@ -53,6 +53,31 @@ describe("normalizeArtifact", () => {
   });
 });
 
+describe("per-service section stripping", () => {
+  const rawWithExtras = modelArtifactSchema.parse({
+    title: "Check",
+    sections: [{ heading: "Findings", body: "..." }],
+    email: { subjectOptions: ["x"], body: "Hi there" },
+    comparison: { options: ["A"], criteria: [{ label: "Cost", values: ["$1"] }] },
+  });
+
+  it("drops email/comparison Verify is not meant to produce", () => {
+    const a = normalizeArtifact(rawWithExtras, "verify", []);
+    expect(a.email).toBeUndefined();
+    expect(a.comparison).toBeUndefined();
+  });
+
+  it("keeps a non-empty email for Write (which does produce email)", () => {
+    const a = normalizeArtifact(rawWithExtras, "write", []);
+    expect(a.email?.body).toBe("Hi there");
+  });
+
+  it("drops an empty email even for a service that allows it", () => {
+    const raw = modelArtifactSchema.parse({ title: "x", sections: [], email: { subjectOptions: [], body: "  " } });
+    expect(normalizeArtifact(raw, "write", []).email).toBeUndefined();
+  });
+});
+
 describe("claim schema classification", () => {
   it("accepts all five classifications", () => {
     for (const c of ["verified_fact", "reported_claim", "opinion", "unresolved_question", "not_sufficiently_supported"]) {

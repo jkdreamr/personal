@@ -45,13 +45,14 @@ export function routeModel(_preference: ModelPreference, kind: TaskKind): ModelI
 }
 
 /**
- * Resilience fallback only — used when the preferred model is unavailable, NOT to call several
- * models per task by default. Limited to Owl → GPT-OSS. Nemotron and Laguna are never auto-used.
+ * Resilience fallback — tried IN ORDER only when a model fails, never to call several models
+ * on success. Owl Alpha is an alpha model and can be flaky/unavailable, so the chain degrades
+ * Owl → GPT-OSS → Nemotron (all free) to keep a real result coming back. Laguna is never used.
  */
 export function fallbackChain(preferred: ModelId): ModelId[] {
   if (preferred === MODELS.reviewer) {
-    // An explicit second opinion falls back only to Owl, never down to the fast model.
-    return [MODELS.reviewer, MODELS.primary];
+    // An explicit second opinion degrades to Owl, then GPT-OSS.
+    return Array.from(new Set<ModelId>([MODELS.reviewer, MODELS.primary, MODELS.fast]));
   }
-  return Array.from(new Set<ModelId>([preferred, MODELS.primary, MODELS.fast]));
+  return Array.from(new Set<ModelId>([preferred, MODELS.primary, MODELS.fast, MODELS.reviewer]));
 }
