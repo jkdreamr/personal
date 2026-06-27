@@ -112,3 +112,97 @@ export async function chatComplete(req: ChatRequest): Promise<string> {
   }
   return content;
 }
+
+/**
+ * Streaming chat completion (Server-Sent Events). Calls `onDelta` with each text chunk as it
+ * arrives and resolves with the full text. This is what makes results feel fast — the first
+ * words appear in ~1s instead of waiting for the whole response.
+ */
+export async function chatCompleteStream(req: ChatRequest, onDelta: (text: string) => void): Promise<string> {
+  if (!serverEnv.openRouterKey) {
+    throw new ProviderError("No OpenRouter key configured.", 500, false);
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), req.timeoutMs ?? 60_000);
+  if (req.signal) {
+    if (req.signal.aborted) controller.abort();
+    else req.signal.addEventListener("abort", () => controller.abort(), { once: true });
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(OPENROUTER_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${serverEnv.openRouterKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://harbor.app",
+        "X-Title": "Harbor",
+      },
+      body: JSON.stringify({
+        model: req.model,
+        messages: req.messages,
+        temperature: req.temperature ?? 0.4,
+        max_tokens: req.maxTokens ?? 2400,
+        stream: true,
+        ...(req.jsonMode ? { response_format: { type: "json_object" } } : {}),
+      }),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    clearTimeout(timeout);
+    const aborted = err instanceof Error && err.name === "AbortError";
+    throw new ProviderError(aborted ? "The request was cancelled or timed out." : "Could not reach the model provider.", 503, !aborted);
+  }
+
+  if (!res.ok || !res.body) {
+    clearTimeout(timeout);
+    let detail = "";
+    try {
+      detail = (await res.json())?.error?.message ?? "";
+    } catch {
+      /* ignore */
+    }
+    throw new ProviderError(detail || `Provider returned ${res.status}.`, res.status, isRetryableStatus(res.status));
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let full = "";
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let nl: number;
+      while ((nl = buffer.indexOf("\n")) !== -1) {
+        const line = buffer.slice(0, nl).trim();
+        buffer = buffer.slice(nl + 1);
+        if (!line || !line.startsWith("data:")) continue;
+        const payload = line.slice(5).trim();
+        if (payload === "[DONE]") continue;
+        try {
+          const json = JSON.parse(payload) as {
+            choices?: { delta?: { content?: string } }[];
+            usage?: { total_tokens?: number };
+          };
+          const delta = json.choices?.[0]?.delta?.content;
+          if (delta) {
+            full += delta;
+            onDelta(delta);
+          }
+          if (req.onUsage && typeof json.usage?.total_tokens === "number") req.onUsage(json.usage.total_tokens);
+        } catch {
+          /* skip malformed keep-alive lines */
+        }
+      }
+    }
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  if (!full) throw new ProviderError("The model returned an empty response.", 502, true);
+  return full;
+}

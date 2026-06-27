@@ -2,44 +2,43 @@ import { test, expect } from "@playwright/test";
 
 test.use({ permissions: ["clipboard-read", "clipboard-write"] });
 
-test.describe("Write (demo mode)", () => {
-  test("produces a draft, copies, and exports markdown", async ({ page }) => {
+test.describe("Write studio (demo mode)", () => {
+  test("auto-writes a streamed draft, copies, and exports markdown", async ({ page }) => {
     await page.goto("/write");
-    await expect(page.getByRole("heading", { name: "What do you need to write?" })).toBeVisible();
+    await expect(page.getByLabel("What are you writing?")).toBeVisible();
 
-    await page
-      .getByRole("textbox")
-      .first()
-      .fill("Draft a short, warm follow-up email to Dana confirming the March start and next steps.");
-    await page.getByRole("button", { name: "Create draft" }).click();
+    await page.getByLabel("What are you writing?").fill("A short, warm follow-up to Dana confirming the March start.");
+    await page.getByRole("button", { name: "Write it for me" }).click();
 
-    // Real result appears with the demo label and an editable artifact.
-    await expect(page.getByText("Demo example", { exact: false })).toBeVisible();
-    await expect(page.locator("article.print-document")).toBeVisible();
-    const copyBtn = page.getByRole("button", { name: "Copy", exact: true });
-    await expect(copyBtn).toBeVisible();
+    // The draft streams into the editor.
+    const editor = page.getByPlaceholder(/Start writing/);
+    await expect(editor).toHaveValue(/Demo draft|March start/i, { timeout: 15000 });
 
-    // Copy → clean text
-    await copyBtn.click();
-    await page.getByRole("button", { name: "Copy clean text" }).click();
-    await expect(page.getByText("Clean text copied to clipboard.", { exact: true })).toBeVisible();
+    // Copy the draft.
+    await page.getByRole("button", { name: "Copy", exact: true }).click();
+    await expect(page.getByText("Copied to clipboard.", { exact: true })).toBeVisible();
 
-    // Export → Markdown triggers a real download with a clean filename.
-    const downloadPromise = page.waitForEvent("download");
+    // Export markdown → real download.
+    const dl = page.waitForEvent("download");
     await page.getByRole("button", { name: "Export" }).click();
     await page.getByRole("button", { name: /Markdown/ }).click();
-    const download = await downloadPromise;
-    expect(download.suggestedFilename()).toMatch(/^harbor-draft-.*\.md$/);
+    expect((await dl).suggestedFilename()).toMatch(/^harbor-draft-.*\.md$/);
   });
 
-  test("refinement chips re-run and keep the workspace", async ({ page }) => {
+  test("typing surfaces live editorial hints", async ({ page }) => {
     await page.goto("/write");
-    await page.getByRole("textbox").first().fill("Write a concise internal memo about moving the launch to April.");
-    await page.getByRole("button", { name: "Create draft" }).click();
-    await expect(page.locator("article.print-document")).toBeVisible();
+    const editor = page.getByPlaceholder(/Start writing/);
+    await editor.fill("In conclusion, we leverage robust holistic synergy to unlock game-changing value.");
+    // Local style hints appear without a model call.
+    await expect(page.getByRole("button", { name: /suggestion/ })).toBeVisible({ timeout: 5000 });
+  });
 
-    await page.getByRole("button", { name: "Make it shorter" }).click();
-    // Still shows a result (no crash, work preserved).
-    await expect(page.locator("article.print-document")).toBeVisible();
+  test("draft persists across a refresh", async ({ page }) => {
+    await page.goto("/write");
+    await page.getByPlaceholder(/Start writing/).fill("My own sentence that should survive a reload.");
+    await expect(page).toHaveURL(/\/write\?task=/, { timeout: 5000 });
+    await page.waitForTimeout(800); // let autosave flush
+    await page.reload();
+    await expect(page.getByPlaceholder(/Start writing/)).toHaveValue(/should survive a reload/);
   });
 });

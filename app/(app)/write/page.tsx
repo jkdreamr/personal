@@ -1,5 +1,5 @@
-import { ServiceWorkspace } from "@/components/workspace/ServiceWorkspace";
+import { WriteStudio } from "@/components/write/WriteStudio";
 
 export default function Page() {
-  return <ServiceWorkspace serviceId="write" />;
+  return <WriteStudio />;
 }

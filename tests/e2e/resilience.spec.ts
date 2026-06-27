@@ -21,9 +21,9 @@ test.describe("Resilience", () => {
       }
     });
 
-    await page.goto("/write");
-    await page.getByRole("textbox").first().fill("Draft a quick note to the team about the schedule change for next week.");
-    await page.getByRole("button", { name: "Create draft" }).click();
+    await page.goto("/brief");
+    await page.getByRole("textbox").first().fill("Brief the team on the schedule change for next week and the main risks.");
+    await page.getByRole("button", { name: "Create brief" }).click();
 
     // Error surfaces with recovery, work preserved (goal still in context).
     await expect(page.getByText(/temporarily unavailable/i)).toBeVisible();
@@ -46,7 +46,7 @@ test.describe("Resilience", () => {
   });
 
   test("empty input cannot start a task", async ({ page }) => {
-    await page.goto("/write");
-    await expect(page.getByRole("button", { name: "Create draft" })).toBeDisabled();
+    await page.goto("/brief");
+    await expect(page.getByRole("button", { name: "Create brief" })).toBeDisabled();
   });
 });

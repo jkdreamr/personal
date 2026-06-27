@@ -128,5 +128,12 @@ correct code lets you in), and at least one non-demo route returns a real, sourc
   demo/offline mode OCR is skipped and routes you to manual text correction.
 - **PPTX export is intentionally not shipped** (it isn't verified end-to-end). Presentations support
   an in-browser present mode, print-to-PDF, and outline/notes copy instead.
-- **Autocomplete** ghost-text is implemented at the API layer with the documented constraints; it is
-  not wired into the editor UI in this build (and returns nothing in demo mode).
+
+## Write studio (live writing)
+
+`/write` is a cursor-style writing surface: type freely with **ghost-text autocomplete** (Tab to
+accept, Esc to dismiss), **live editorial hints** (local, instant), and streaming **Auto-write /
+Continue / Improve selection** actions. Generation **streams** token-by-token (`/api/compose`,
+SSE from OpenRouter) so the draft appears as it's written rather than after a long wait — the
+biggest perceived-speed win. In demo mode the studio streams a locally-built draft and a light
+heuristic ghost suggestion, so the whole experience is testable without a key.
