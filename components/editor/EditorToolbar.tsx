@@ -21,9 +21,11 @@ import {
   Undo2,
   Redo2,
   Sigma,
+  Type,
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/overlays";
 import { Button } from "@/components/ui/button";
+import { WRITING_FONTS } from "@/lib/client/writing-fonts";
 import { cn } from "@/lib/utils";
 
 /** A single icon button. Toggles expose aria-pressed; all have a tooltip + accessible label. */
@@ -131,6 +133,47 @@ export function EditorToolbar({ editor, className }: { editor: Editor | null; cl
         label="Insert math"
         onClick={() => editor.chain().focus().insertInlineMath({ latex: "x" }).run()}
       />
+      <Popover>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            aria-label="Font for selected text"
+            title="Font (selected text)"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-btn text-ink/80 hover:bg-ink/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/70"
+          >
+            <Type className="h-[18px] w-[18px]" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-52">
+          <p className="px-2 pb-1 text-meta text-muted">Font for the selected text</p>
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().unsetFontFamily().run()}
+            className="flex w-full items-center rounded-btn px-2.5 py-1.5 text-left text-sm text-ink hover:bg-ink/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/70"
+          >
+            Default
+          </button>
+          {WRITING_FONTS.map((f) => {
+            const active = editor.getAttributes("textStyle").fontFamily === f.stack;
+            return (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => editor.chain().focus().setFontFamily(f.stack).run()}
+                aria-pressed={active}
+                style={{ fontFamily: f.stack }}
+                className={cn(
+                  "flex w-full items-center rounded-btn px-2.5 py-1.5 text-left text-sm text-ink hover:bg-ink/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/70",
+                  active && "bg-ink/[0.08] font-medium"
+                )}
+              >
+                {f.label.replace(" (default)", "")}
+              </button>
+            );
+          })}
+        </PopoverContent>
+      </Popover>
       <Popover
         open={linkOpen}
         onOpenChange={(o) => {

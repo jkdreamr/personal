@@ -9,6 +9,8 @@ import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import Placeholder from "@tiptap/extension-placeholder";
 import { InlineMath, BlockMath } from "@tiptap/extension-mathematics";
+import { TextStyle } from "@tiptap/extension-text-style";
+import { FontFamily } from "@tiptap/extension-font-family";
 import { Markdown } from "tiptap-markdown";
 import { nodeInputRule, type Extensions } from "@tiptap/core";
 import { ImproveHighlight } from "./improve-highlight";
@@ -62,6 +64,10 @@ export function richDocExtensions(opts: RichDocExtensionOptions = {}): Extension
     }),
     TaskList,
     TaskItem.configure({ nested: true }),
+    // Per-text font: a TextStyle mark carrying a font-family, applied to the selection from the
+    // toolbar. The canonical JSON preserves it; markdown export (which can't express fonts) ignores it.
+    TextStyle,
+    FontFamily,
     // Inline `$...$` and display `$$...$$` math via KaTeX. throwOnError:false renders invalid LaTeX
     // inline (in red) instead of crashing the document — graceful degradation, never a hard error.
     InlineMathTyped.configure({ katexOptions: { throwOnError: false } }),

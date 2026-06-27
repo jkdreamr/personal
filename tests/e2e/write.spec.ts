@@ -95,6 +95,20 @@ test.describe("Write studio (demo mode)", () => {
     await expect(page.getByRole("listitem").filter({ hasText: "robust" })).toHaveCount(0);
   });
 
+  test("inline font: apply a font to just the selected text", async ({ page }) => {
+    await page.goto("/write");
+    const editor = page.getByRole("textbox", { name: "Document editor" });
+    await editor.click();
+    await page.keyboard.type("Some words to restyle");
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.getByRole("button", { name: "Font for selected text" }).click();
+    await page.getByRole("button", { name: "Serif", exact: true }).click();
+    // A textStyle span carrying the serif font wraps the selection.
+    const styled = editor.locator('span[style*="font-family"]');
+    await expect(styled.first()).toBeVisible();
+    await expect(styled.first()).toHaveCSS("font-family", /Iowan|Palatino|Georgia/);
+  });
+
   test("shows the word count of the current selection", async ({ page }) => {
     await page.goto("/write");
     const editor = page.getByRole("textbox", { name: "Document editor" });
