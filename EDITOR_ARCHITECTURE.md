@@ -63,6 +63,12 @@ downloads). `useWritingFont` persists the choice in the preferences store and ap
 (the app chrome keeps `--font-sans`, so UI hierarchy is unaffected). `WritingFontInit` (in the app
 layout) applies it on every page; `WritingFontPicker` is the document-settings control.
 
+**Per-text font.** Beyond the document-wide choice, a `TextStyle` + `FontFamily` mark
+(`@tiptap/extension-{text-style,font-family}`) lets the writer apply one of the writing fonts to *just
+the current selection* via the toolbar **Font** dropdown (or reset to the document default). The mark
+lives in the canonical JSON; the deterministic markdown/text serializers pass the text through
+untouched (markdown can't express a font), so exports are unaffected.
+
 ## Suggest (Grammarly-style editorial suggestions)
 
 A quiet **Suggest** control runs a careful editorial analysis (`/api/suggest`, ~10s) returning a
@@ -76,10 +82,37 @@ Accept replaces exactly the mapped range as one undoable transaction; on each ed
 re-resolved so a suggestion whose text changed is marked **stale** (Accept disabled, Refresh offered).
 Demo mode (`lib/ai/demo-suggest.ts`) returns deterministic local suggestions for testing.
 
+## Editable surfaces beyond prose
+
+Not every result is a single prose document, so two structured surfaces have their own editors that
+follow the same "edit persists separately from the regenerated artifact" rule as `doc`/`editedBody`:
+
+- **Slides (Present)** — `components/workspace/SlideDeck.tsx` is a full deck surface: a slide
+  navigator (thumbnails, `aria-current`), click-to-edit fields per slide (layout, title, message,
+  bullets, speaker notes), add / duplicate / delete / reorder with a 40-step undo history, and a
+  keyboard-driven Present mode (arrows / space / PageUp-Down, Escape exits). Edits persist to
+  `Task.slides` (preferred over `artifact.slides`); regeneration clears them. Slides inherit the
+  `--writing-font`. Print uses a static block — never a nested `print-document`.
+- **Cover / follow-up email (Proposal, Meeting, Write)** — `ArtifactBody` renders the email body with
+  a quiet Edit/Done toggle that swaps to a textarea. Edits persist to `Task.editedEmail` (saved
+  immediately, since email edits are infrequent and a refresh right after must not drop them), are
+  merged back into the artifact for copy + every export format, and are cleared on regenerate.
+
+## Service surfacing
+
+`components/workspace/Workspace.tsx` shows each service's declared `modes` (lib/services.ts) as quiet,
+optional "Common uses" chips on the empty first screen; clicking one fills the goal with a natural
+sentence so a non-technical user isn't faced with a blank box. The chips step aside once a goal exists
+and are never a required choice.
+
 ## Testing
 
 `tests/unit/richdoc.test.ts` (jsdom) covers serialization of every node/mark, markdown round-trips,
 checklist round-trips, inline/block math, malformed-input safety, and legacy migration precedence.
 `tests/unit/writing-fonts.test.ts` covers font resolution. E2E (`write.spec.ts`, `editing.spec.ts`)
 cover toolbar/keyboard formatting, cursor-anchored autocomplete (Tab/Esc + list-indent fallthrough),
-the Improve-selection flow (visible highlight + exact replacement), and font persistence.
+the Improve-selection flow (visible highlight + exact replacement), per-text font, selection word
+count, and font persistence. `services.spec.ts` covers the editable Present deck (navigate / edit /
+add / delete / undo / present-mode), the editable follow-up email that survives a reload, the
+"Common uses" starting-point chips, and a per-service smoke pass (Compare, Challenge, Research,
+Explain, Decide, Proposal, Brief, Notes draft entry).
