@@ -207,7 +207,14 @@ export function Workspace({ serviceId, taskId, autorun }: { serviceId: ServiceId
           <Cloud className="h-3.5 w-3.5" /> Saved locally · {relativeTime(task.updatedAt)}
         </span>
         {hasArtifact && task.artifact && (
-          <Toolbar service={serviceId} artifact={task.artifact} editedBody={task.editedBody} taskId={task.id} onDuplicate={onDuplicate} />
+          <Toolbar
+            service={serviceId}
+            // Export/copy reflect the user's edited slides when present.
+            artifact={task.slides && task.slides.length ? { ...task.artifact, slides: task.slides } : task.artifact}
+            editedBody={task.editedBody}
+            taskId={task.id}
+            onDuplicate={onDuplicate}
+          />
         )}
       </div>
     </div>
@@ -296,6 +303,8 @@ export function Workspace({ serviceId, taskId, autorun }: { serviceId: ServiceId
                 doc={task.doc}
                 editedBody={task.editedBody}
                 onDoc={(d, md) => update({ doc: d, editedBody: md })}
+                slides={task.slides}
+                onSlides={(s) => update({ slides: s })}
                 editable
                 goal={task.goal}
                 context={task.attachments.map((a) => a.text).filter(Boolean).join("\n\n")}

@@ -3,7 +3,7 @@
 import * as React from "react";
 import dynamic from "next/dynamic";
 import { Info, Pencil, Check } from "lucide-react";
-import type { Artifact } from "@/lib/types";
+import type { Artifact, Slide } from "@/lib/types";
 import { Badge } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
 import { SafeMarkdown } from "./SafeMarkdown";
@@ -35,6 +35,8 @@ export function ArtifactBody({
   doc,
   editedBody,
   onDoc,
+  slides,
+  onSlides,
   editable,
   goal,
   context,
@@ -45,6 +47,9 @@ export function ArtifactBody({
   editedBody?: string;
   /** Persist the canonical rich doc + its derived markdown. */
   onDoc: (doc: RichDoc, markdown: string) => void;
+  /** User-edited slides (preferred over artifact.slides) + persist callback. */
+  slides?: Slide[];
+  onSlides?: (slides: Slide[]) => void;
   editable: boolean;
   goal?: string;
   context?: string;
@@ -137,12 +142,15 @@ export function ArtifactBody({
         </section>
       )}
 
-      {artifact.slides && artifact.slides.length > 0 && (
-        <section className="mt-6">
-          <h2 className="mb-3 text-lead font-semibold text-ink">Slides</h2>
-          <SlideDeck slides={artifact.slides} />
-        </section>
-      )}
+      {(() => {
+        const effective = slides && slides.length > 0 ? slides : artifact.slides;
+        return effective && effective.length > 0 ? (
+          <section className="mt-6">
+            <h2 className="mb-3 text-lead font-semibold text-ink">Slides</h2>
+            <SlideDeck slides={effective} onChange={editable ? onSlides : undefined} />
+          </section>
+        ) : null;
+      })()}
 
       {artifact.comparison && artifact.comparison.criteria?.length > 0 && (
         <section className="mt-6">

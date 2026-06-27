@@ -29,14 +29,36 @@ test.describe("Existing-draft entry (demo mode)", () => {
 });
 
 test.describe("Intelligence + Create services (demo mode)", () => {
-  test("Present builds a slide deck preview with a Present button", async ({ page }) => {
+  test("Present: build, navigate, edit a slide, add/delete with undo, and present-mode keyboard", async ({ page }) => {
     await page.goto("/present");
     await page.getByRole("textbox").first().fill("A short investor deck: our product helps teams ship migrations faster and safer.");
     await page.getByRole("button", { name: "Build presentation" }).click();
-
     await expect(page.getByRole("heading", { name: "Slides" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Present" })).toBeVisible();
-    await expect(page.getByText(/slides/i).first()).toBeVisible();
+
+    // Navigator + count.
+    const navButtons = page.getByRole("navigation", { name: "Slides" }).getByRole("button");
+    const n = await navButtons.count();
+    expect(n).toBeGreaterThan(0);
+    await expect(page.getByText(/\d+ slides/)).toBeVisible();
+
+    // Click-to-edit the current slide's title → reflected in the navigator.
+    await page.getByRole("textbox", { name: "Slide title" }).fill("EDITEDTITLE");
+    await expect(page.getByRole("navigation", { name: "Slides" }).getByRole("button", { name: /Slide 1: EDITEDTITLE/ })).toBeVisible();
+
+    // Add a slide → count grows; delete → shrinks; undo restores.
+    await page.getByRole("button", { name: "Add slide" }).click();
+    await expect(navButtons).toHaveCount(n + 1);
+    await page.getByRole("button", { name: "Delete slide" }).click();
+    await expect(navButtons).toHaveCount(n);
+    await page.getByRole("button", { name: "Undo" }).click();
+    await expect(navButtons).toHaveCount(n + 1);
+
+    // Present mode: opens, arrow keys navigate, Escape exits.
+    await page.getByRole("button", { name: "Present", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Exit presentation" })).toBeVisible();
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("button", { name: "Exit presentation" })).toHaveCount(0);
   });
 
   test("Compare renders a comparison table", async ({ page }) => {

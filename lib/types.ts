@@ -180,6 +180,8 @@ export type Task = {
   artifact?: Artifact;
   /** The user's existing draft (when they chose "I already have a draft" for a draft-capable service). */
   draft?: string;
+  /** User-edited slide deck (Present), kept separate so regeneration doesn't clobber it. */
+  slides?: Slide[];
   /**
    * Canonical user-edited body as a rich document (ProseMirror JSON). Source of truth for edits.
    * Kept separate from the artifact so regeneration doesn't clobber manual work.
