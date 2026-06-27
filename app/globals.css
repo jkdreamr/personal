@@ -251,6 +251,13 @@
     user-select: none;
     white-space: pre-wrap;
   }
+  /* Editorial suggestion markers (the "Suggest" feature) — a calm amber underline. */
+  .rich-editor .ProseMirror .rd-suggestion {
+    border-bottom: 2px solid rgb(138 90 31 / 0.5);
+    background: rgb(138 90 31 / 0.06);
+    border-radius: 2px;
+  }
+
   /* Persistent "about to change this" highlight for Improve selection. */
   .rich-editor .ProseMirror .rd-improve-target {
     background: rgb(138 90 31 / 0.16);

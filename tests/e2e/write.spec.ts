@@ -70,6 +70,31 @@ test.describe("Write studio (demo mode)", () => {
     await expect(editor.locator(".rd-ghost-text")).toHaveCount(0);
   });
 
+  test("Suggest: analyzes the draft, shows suggestions + inline markers, and accepts an exact patch", async ({ page }) => {
+    await page.goto("/write");
+    const editor = page.getByRole("textbox", { name: "Document editor" });
+    await editor.click();
+    await page.keyboard.type("We will utilize a robust plan to leverage the team this quarter.");
+    await page.getByRole("button", { name: "Suggest" }).click();
+
+    // The suggestions panel opens with results (demo provides deterministic ones).
+    await expect(page.getByRole("region", { name: "Editorial suggestions" })).toBeVisible();
+    const card = page.getByRole("listitem").filter({ hasText: "utilize" }).first();
+    await expect(card).toBeVisible({ timeout: 8000 });
+    // The target is marked inline in the editor.
+    await expect(editor.locator(".rd-suggestion").first()).toBeVisible();
+
+    // Accept → the exact target is replaced; the rest of the sentence is untouched.
+    await card.getByRole("button", { name: "Accept" }).click();
+    await expect(editor).not.toContainText("utilize");
+    await expect(editor).toContainText("We will use a robust plan");
+
+    // Dismiss another suggestion → it disappears from the panel.
+    const robustCard = page.getByRole("listitem").filter({ hasText: "robust" }).first();
+    await robustCard.getByRole("button", { name: "Dismiss" }).click();
+    await expect(page.getByRole("listitem").filter({ hasText: "robust" })).toHaveCount(0);
+  });
+
   test("shows the word count of the current selection", async ({ page }) => {
     await page.goto("/write");
     const editor = page.getByRole("textbox", { name: "Document editor" });

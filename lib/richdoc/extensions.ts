@@ -13,6 +13,7 @@ import { Markdown } from "tiptap-markdown";
 import { nodeInputRule, type Extensions } from "@tiptap/core";
 import { ImproveHighlight } from "./improve-highlight";
 import { GhostText } from "./ghost-text";
+import { SuggestionMarks } from "./suggestion-marks";
 
 // The bundled math input rules are anchored to the start of a block, so `$x$` typed mid-line (or
 // even at line start, fragilely) never converts. Replace them with rules that fire anywhere:
@@ -70,6 +71,7 @@ export function richDocExtensions(opts: RichDocExtensionOptions = {}): Extension
     Placeholder.configure({ placeholder: opts.placeholder ?? "Start writing…" }),
     ImproveHighlight,
     GhostText,
+    SuggestionMarks,
   ];
 }
 

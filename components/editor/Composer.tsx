@@ -2,17 +2,20 @@
 
 import * as React from "react";
 import type { Editor } from "@tiptap/react";
-import { Sparkles, ArrowDown, Wand2, StopCircle, CornerDownLeft } from "lucide-react";
+import { Sparkles, ArrowDown, Wand2, StopCircle, CornerDownLeft, Lightbulb } from "lucide-react";
 import { streamCompose } from "@/lib/client/compose";
+import { fetchSuggestions } from "@/lib/client/suggest";
 import { lintText, type StyleWarning } from "@/lib/editorial/style-lint";
 import { markdownToDoc, toProseMirrorDoc, docToText, isDocEmpty, type RichDoc } from "@/lib/richdoc";
+import { findRange } from "@/lib/richdoc/find-range";
 import { RichDocumentEditor, type RichEditorChange } from "./RichDocumentEditor";
 import { useGhostText } from "./useGhostText";
+import { SuggestPanel, type ActiveSuggestion } from "./SuggestPanel";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/primitives";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/overlays";
 import { useToast } from "@/components/ui/toast";
-import { cn } from "@/lib/utils";
+import { cn, uid } from "@/lib/utils";
 
 export type ComposerAction = "write" | "continue" | "improve";
 
@@ -84,6 +87,13 @@ export function Composer({
   const [preset, setPreset] = React.useState<string | null>(null);
   const [custom, setCustom] = React.useState("");
   const selectionRef = React.useRef<{ from: number; to: number; text: string } | null>(null);
+
+  // "Suggest" (editorial analysis) panel state.
+  const [suggestOpen, setSuggestOpen] = React.useState(false);
+  const [suggestLoading, setSuggestLoading] = React.useState(false);
+  const [suggestions, setSuggestions] = React.useState<ActiveSuggestion[]>([]);
+  const [suggestOverall, setSuggestOverall] = React.useState<string[]>([]);
+  const suggestCtl = React.useRef<AbortController | null>(null);
 
   const streamCtl = React.useRef<AbortController | null>(null);
   const hintTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -259,9 +269,112 @@ export function Composer({
 
   const canApply = Boolean(custom.trim().length > 1 || preset);
 
+  // ---- Suggest (Grammarly-style editorial suggestions) ---------------------
+
+  const applyRanges = React.useCallback((list: ActiveSuggestion[]) => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const ranges = list
+      .filter((s) => s.status === "active" && s.from != null && s.to != null)
+      .map((s) => ({ id: s.id, from: s.from as number, to: s.to as number }));
+    editor.commands.setSuggestionRanges(ranges);
+  }, []);
+
+  // Re-locate each suggestion's target in the current document → active range or stale.
+  const resolve = React.useCallback((items: ActiveSuggestion[]): ActiveSuggestion[] => {
+    const editor = editorRef.current;
+    if (!editor) return items;
+    return items.map((s) => {
+      const r = findRange(editor, s.target);
+      return r ? { ...s, from: r.from, to: r.to, status: "active" as const } : { ...s, from: undefined, to: undefined, status: "stale" as const };
+    });
+  }, []);
+
+  const runSuggest = async () => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const text = editor.getText({ blockSeparator: "\n" });
+    if (text.trim().length < 20) {
+      toast({ title: "Write a little more first, then ask for suggestions." });
+      return;
+    }
+    setSuggestOpen(true);
+    setSuggestLoading(true);
+    suggestCtl.current?.abort();
+    const c = new AbortController();
+    suggestCtl.current = c;
+    const res = await fetchSuggestions({ text, goal, context, tone: tone || undefined, length: length || undefined }, c.signal);
+    if (c.signal.aborted) return;
+    const resolved = resolve(res.suggestions.map((s) => ({ ...s, id: uid(), status: "active" as const })));
+    setSuggestions(resolved);
+    setSuggestOverall(res.overall);
+    setSuggestLoading(false);
+    applyRanges(resolved);
+  };
+
+  const acceptSuggestion = (id: string) => {
+    const editor = editorRef.current;
+    const s = suggestions.find((x) => x.id === id);
+    if (!editor || !s) return;
+    const r = findRange(editor, s.target);
+    if (!r) {
+      setSuggestions((cur) => {
+        const next = cur.map((x) => (x.id === id ? { ...x, status: "stale" as const, from: undefined, to: undefined } : x));
+        applyRanges(next);
+        return next;
+      });
+      return;
+    }
+    // Exactly replace the range as one undoable transaction; preserves surrounding formatting.
+    editor.chain().focus().insertContentAt({ from: r.from, to: r.to }, s.replacement).run();
+    setSuggestions((cur) => {
+      const next = resolve(cur.filter((x) => x.id !== id));
+      applyRanges(next);
+      return next;
+    });
+  };
+
+  const dismissSuggestion = (id: string) => {
+    setSuggestions((cur) => {
+      const next = cur.filter((x) => x.id !== id);
+      applyRanges(next);
+      return next;
+    });
+  };
+
+  const closeSuggest = () => {
+    suggestCtl.current?.abort();
+    setSuggestOpen(false);
+    setSuggestions([]);
+    setSuggestOverall([]);
+    editorRef.current?.commands.clearSuggestionRanges();
+  };
+
+  // Keep suggestion ranges/markers in sync as the user edits (and mark edited-away ones stale).
+  React.useEffect(() => {
+    if (!editorInstance || !suggestOpen) return;
+    let t: ReturnType<typeof setTimeout> | null = null;
+    const onUpd = () => {
+      if (t) clearTimeout(t);
+      t = setTimeout(() => {
+        setSuggestions((cur) => {
+          const next = resolve(cur);
+          applyRanges(next);
+          return next;
+        });
+      }, 300);
+    };
+    editorInstance.on("update", onUpd);
+    return () => {
+      editorInstance.off("update", onUpd);
+      if (t) clearTimeout(t);
+    };
+  }, [editorInstance, suggestOpen, resolve, applyRanges]);
+
   React.useEffect(() => {
     return () => {
       streamCtl.current?.abort();
+      suggestCtl.current?.abort();
       if (hintTimer.current) clearTimeout(hintTimer.current);
     };
   }, []);
@@ -351,6 +464,9 @@ export function Composer({
             </PopoverContent>
           </Popover>
         )}
+        <Button size="sm" variant="secondary" onClick={runSuggest} disabled={streaming} aria-expanded={suggestOpen}>
+          <Lightbulb className="h-4 w-4" /> Suggest
+        </Button>
         {streaming && (
           <button onClick={stop} className="inline-flex items-center gap-1 text-meta text-muted underline underline-offset-2 hover:text-ink">
             <StopCircle className="h-3.5 w-3.5" /> Stop
@@ -415,6 +531,18 @@ export function Composer({
           </>
         )}
       </div>
+
+      {suggestOpen && (
+        <SuggestPanel
+          loading={suggestLoading}
+          suggestions={suggestions}
+          overall={suggestOverall}
+          onAccept={acceptSuggestion}
+          onDismiss={dismissSuggestion}
+          onRefresh={runSuggest}
+          onClose={closeSuggest}
+        />
+      )}
     </div>
   );
 }
