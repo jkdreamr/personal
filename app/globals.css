@@ -256,6 +256,11 @@
     border-bottom: 2px solid rgb(138 90 31 / 0.5);
     background: rgb(138 90 31 / 0.06);
     border-radius: 2px;
+    cursor: pointer;
+    transition: background-color 0.12s ease;
+  }
+  .rich-editor .ProseMirror .rd-suggestion:hover {
+    background: rgb(138 90 31 / 0.14);
   }
 
   /* Persistent "about to change this" highlight for Improve selection. */

@@ -14,10 +14,14 @@ describe("demo suggestions", () => {
     expect(suggestResponseSchema.safeParse(res).success).toBe(true);
   });
 
-  it("caps the list and always includes overall direction", () => {
+  it("surfaces a generous, varied set (not just a couple) and always includes overall direction", () => {
     const text = "utilize leverage robust holistic game-changing synergy a number of in order to very unique";
     const res = demoSuggest(text);
-    expect(res.suggestions.length).toBeLessThanOrEqual(6);
+    // A real markup pass marks up a lot — many distinct issues here, capped at 12.
+    expect(res.suggestions.length).toBeGreaterThan(6);
+    expect(res.suggestions.length).toBeLessThanOrEqual(12);
+    // The set spans more than one kind of fix.
+    expect(new Set(res.suggestions.map((s) => s.category)).size).toBeGreaterThan(1);
     expect(res.overall.length).toBeGreaterThan(0);
   });
 

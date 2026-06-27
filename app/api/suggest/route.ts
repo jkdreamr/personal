@@ -20,9 +20,20 @@ const schema = z.object({
   length: z.string().max(40).optional(),
 });
 
-const SYSTEM = `You are a careful, senior editor. Analyse the user's DRAFT and return the few most VALUABLE, high-confidence improvements — not nitpicks. Return ONE JSON object only:
-{"suggestions":[{"target": "<an EXACT substring copied verbatim from the draft, at most ~14 words>", "replacement": "<the improved text, or \\"\\" to delete>", "category": "clarity|grammar|concision|tone|repetition|structure|specificity|consistency", "rationale": "<one short sentence>"}], "overall": ["<2-4 broader, document-level recommendations grounded in the goal and draft>"]}
-Rules: each "target" MUST be an exact, contiguous substring of the draft (so it can be located and replaced) — copy it character-for-character, do not paraphrase. At most 7 suggestions, only confident ones. Never invent facts; for factual wording prefer safer phrasing. No prose, no markdown, no commentary — only the JSON object.`;
+const SYSTEM = `You are a sharp, generous copy editor doing a thorough markup pass. Read the user's DRAFT and surface EVERY worthwhile improvement you can find — a real edit pass marks up a lot, so don't stop at two or three. Look across all of these angles:
+- word choice (vague/jargon/weak words → precise ones), concision (cut wordiness and filler), clarity (untangle confusing phrasing)
+- grammar and punctuation, tone (remove hype/hedging), style and voice (active verbs, confident phrasing)
+- flow and transitions between sentences, sentence variety (break up or merge runs), repetition (recurring words/ideas), structure, specificity (replace generic claims with concrete detail), and consistency
+- ADDITIONS: where a point is thin or a transition is missing, suggest a sentence to ADD — phrase it as a replacement by copying the existing sentence into "target" and putting that same sentence PLUS the new one in "replacement", with category "addition".
+
+Return ONE JSON object only:
+{"suggestions":[{"target": "<an EXACT substring copied verbatim from the draft, at most ~18 words>", "replacement": "<the improved or extended text, or \\"\\" to delete>", "category": "clarity|concision|grammar|punctuation|word-choice|tone|style|flow|repetition|structure|specificity|consistency|addition", "rationale": "<one short, specific sentence>"}], "overall": ["<3-6 broader, document-level recommendations grounded in the goal and draft>"]}
+Rules:
+- Each "target" MUST be an exact, contiguous substring of the draft, copied character-for-character (so it can be located and replaced). Do NOT paraphrase the target.
+- Offer as many genuinely useful suggestions as you find, up to 16. Don't hold back, but don't pad with non-improvements either — every suggestion must make the writing better.
+- Vary the categories; don't return a dozen of the same kind.
+- Never invent facts; for any factual wording, prefer safer phrasing and note it.
+- No prose, no markdown, no commentary — only the JSON object.`;
 
 export async function POST(req: NextRequest) {
   let body: z.infer<typeof schema>;
@@ -60,16 +71,26 @@ export async function POST(req: NextRequest) {
           { role: "system", content: SYSTEM },
           { role: "user", content: userMsg },
         ],
-        temperature: 0.2,
-        maxTokens: 1400,
+        temperature: 0.3,
+        maxTokens: 2600,
         timeoutMs: 30000,
       });
       const parsed = suggestResponseSchema.safeParse(safeParseModelJson(raw));
       if (parsed.success) {
-        // Keep only suggestions whose target actually appears in the draft (so they map to a range).
-        const suggestions = parsed.data.suggestions.filter((s) => body.text.includes(s.target)).slice(0, 7);
+        // Keep only suggestions whose target actually appears in the draft (so they map to a range),
+        // and drop exact duplicates (same target + replacement).
+        const seen = new Set<string>();
+        const suggestions = parsed.data.suggestions
+          .filter((s) => body.text.includes(s.target))
+          .filter((s) => {
+            const k = `${s.target}→${s.replacement}`;
+            if (seen.has(k)) return false;
+            seen.add(k);
+            return true;
+          })
+          .slice(0, 16);
         recordCall({ taskType: "suggest", model, calls: 1, success: true, rateLimited: false });
-        return NextResponse.json({ suggestions, overall: parsed.data.overall.slice(0, 4) }, { headers: { "cache-control": "no-store" } });
+        return NextResponse.json({ suggestions, overall: parsed.data.overall.slice(0, 6) }, { headers: { "cache-control": "no-store" } });
       }
       lastErr = new ProviderError("Unusable suggestion JSON.", 502, true);
     } catch (err) {

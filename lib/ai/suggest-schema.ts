@@ -7,13 +7,18 @@ import { z } from "zod";
  */
 export const SUGGESTION_CATEGORIES = [
   "clarity",
-  "grammar",
   "concision",
+  "grammar",
+  "punctuation",
+  "word-choice",
   "tone",
+  "style",
+  "flow",
   "repetition",
   "structure",
   "specificity",
   "consistency",
+  "addition",
 ] as const;
 
 export type SuggestionCategory = (typeof SUGGESTION_CATEGORIES)[number];
@@ -29,9 +34,9 @@ export const suggestionSchema = z.object({
 });
 
 export const suggestResponseSchema = z.object({
-  suggestions: z.array(suggestionSchema).max(8).default([]),
+  suggestions: z.array(suggestionSchema).max(16).default([]),
   /** Broader, document-level recommendations grounded in the goal + draft. */
-  overall: z.array(z.string().min(1).max(300)).max(6).default([]),
+  overall: z.array(z.string().min(1).max(300)).max(8).default([]),
 });
 
 export type Suggestion = z.infer<typeof suggestionSchema>;

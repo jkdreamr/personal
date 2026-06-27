@@ -95,6 +95,28 @@ test.describe("Write studio (demo mode)", () => {
     await expect(page.getByRole("listitem").filter({ hasText: "robust" })).toHaveCount(0);
   });
 
+  test("Suggest: a richer set of suggestions, and hovering a marker shows an accept card", async ({ page }) => {
+    await page.goto("/write");
+    const editor = page.getByRole("textbox", { name: "Document editor" });
+    await editor.click();
+    // A draft with several distinct issues → the demo should surface many, not just one.
+    await page.keyboard.type("We will utilize a robust plan to leverage synergy in order to drive game-changing results.");
+    await page.getByRole("button", { name: "Suggest" }).click();
+    await expect(page.getByRole("region", { name: "Editorial suggestions" })).toBeVisible();
+    // More than a couple of suggestions (richer pass).
+    await expect.poll(async () => editor.locator(".rd-suggestion").count(), { timeout: 8000 }).toBeGreaterThan(3);
+
+    // Hover the first inline marker → a Grammarly-style card appears, anchored to it.
+    const mark = editor.locator(".rd-suggestion").first();
+    await mark.hover();
+    const card = page.getByRole("dialog", { name: "Suggestion" });
+    await expect(card).toBeVisible();
+    // Accept from the card applies the exact patch.
+    await card.getByRole("button", { name: "Accept" }).click();
+    await expect(card).toBeHidden();
+    await expect(editor).not.toContainText("utilize");
+  });
+
   test("inline font: apply a font to just the selected text", async ({ page }) => {
     await page.goto("/write");
     const editor = page.getByRole("textbox", { name: "Document editor" });

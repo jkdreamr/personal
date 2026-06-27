@@ -11,6 +11,7 @@ import { findRange } from "@/lib/richdoc/find-range";
 import { RichDocumentEditor, type RichEditorChange } from "./RichDocumentEditor";
 import { useGhostText } from "./useGhostText";
 import { SuggestPanel, type ActiveSuggestion } from "./SuggestPanel";
+import { SuggestionHoverCard } from "./SuggestionHoverCard";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/primitives";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/overlays";
@@ -94,6 +95,9 @@ export function Composer({
   const [suggestions, setSuggestions] = React.useState<ActiveSuggestion[]>([]);
   const [suggestOverall, setSuggestOverall] = React.useState<string[]>([]);
   const suggestCtl = React.useRef<AbortController | null>(null);
+  // Hover card for an inline suggestion marker (Grammarly-style): which suggestion + where to anchor.
+  const [hovered, setHovered] = React.useState<{ id: string; rect: DOMRect } | null>(null);
+  const hoverHideTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const streamCtl = React.useRef<AbortController | null>(null);
   const hintTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -371,11 +375,52 @@ export function Composer({
     };
   }, [editorInstance, suggestOpen, resolve, applyRanges]);
 
+  // Hover card lifecycle: a small close delay lets the pointer travel from the underline into the
+  // card (to click Accept) without it vanishing.
+  const cancelHoverHide = React.useCallback(() => {
+    if (hoverHideTimer.current) {
+      clearTimeout(hoverHideTimer.current);
+      hoverHideTimer.current = null;
+    }
+  }, []);
+  const scheduleHoverHide = React.useCallback(() => {
+    cancelHoverHide();
+    hoverHideTimer.current = setTimeout(() => setHovered(null), 150);
+  }, [cancelHoverHide]);
+
+  // Show the hover card when the pointer is over an inline suggestion marker (.rd-suggestion).
+  React.useEffect(() => {
+    if (!editorInstance || !suggestOpen) {
+      setHovered(null);
+      return;
+    }
+    const dom = editorInstance.view.dom as HTMLElement;
+    const onOver = (e: Event) => {
+      const mark = (e.target as HTMLElement | null)?.closest?.(".rd-suggestion") as HTMLElement | null;
+      if (!mark) return;
+      const id = mark.getAttribute("data-suggestion-id");
+      if (!id) return;
+      cancelHoverHide();
+      setHovered({ id, rect: mark.getBoundingClientRect() });
+    };
+    const onOut = (e: Event) => {
+      if ((e.target as HTMLElement | null)?.closest?.(".rd-suggestion")) scheduleHoverHide();
+    };
+    dom.addEventListener("mouseover", onOver);
+    dom.addEventListener("mouseout", onOut);
+    return () => {
+      dom.removeEventListener("mouseover", onOver);
+      dom.removeEventListener("mouseout", onOut);
+      cancelHoverHide();
+    };
+  }, [editorInstance, suggestOpen, cancelHoverHide, scheduleHoverHide]);
+
   React.useEffect(() => {
     return () => {
       streamCtl.current?.abort();
       suggestCtl.current?.abort();
       if (hintTimer.current) clearTimeout(hintTimer.current);
+      if (hoverHideTimer.current) clearTimeout(hoverHideTimer.current);
     };
   }, []);
 
@@ -543,6 +588,28 @@ export function Composer({
           onClose={closeSuggest}
         />
       )}
+
+      {hovered &&
+        (() => {
+          const s = suggestions.find((x) => x.id === hovered.id && x.status === "active");
+          if (!s) return null;
+          return (
+            <SuggestionHoverCard
+              suggestion={s}
+              rect={hovered.rect}
+              onMouseEnter={cancelHoverHide}
+              onMouseLeave={scheduleHoverHide}
+              onAccept={() => {
+                acceptSuggestion(s.id);
+                setHovered(null);
+              }}
+              onDismiss={() => {
+                dismissSuggestion(s.id);
+                setHovered(null);
+              }}
+            />
+          );
+        })()}
     </div>
   );
 }
