@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ChevronLeft, ChevronRight, Play, X, Plus, Copy, Trash2, ArrowUp, ArrowDown, Undo2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Play, MonitorPlay, X, Plus, Copy, Trash2, ArrowUp, ArrowDown, Undo2 } from "lucide-react";
 import type { Slide } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -81,6 +81,11 @@ function SlideCanvas({ slide, index, total, present }: { slide: Slide; index: nu
   );
 }
 
+/** Seconds → m:ss for the presenter clock. */
+function mmss(total: number): string {
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+}
+
 function cloneSlides(slides: Slide[]): Slide[] {
   return slides.map((s) => ({ ...s, bullets: s.bullets ? [...s.bullets] : undefined, evidence: s.evidence ? [...s.evidence] : undefined }));
 }
@@ -91,9 +96,24 @@ const inputClass =
 export function SlideDeck({ slides, onChange }: { slides: Slide[]; onChange?: (slides: Slide[]) => void }) {
   const editable = Boolean(onChange);
   const [presenting, setPresenting] = React.useState(false);
+  const [presenter, setPresenter] = React.useState(false); // presenter view (notes + next) vs. clean audience view
+  const [elapsed, setElapsed] = React.useState(0); // seconds since the presentation started
   const [idx, setIdx] = React.useState(0);
   const history = React.useRef<Slide[][]>([]);
   const [canUndo, setCanUndo] = React.useState(false);
+
+  // Run an elapsed-time clock while presenting; reset whenever a presentation starts.
+  React.useEffect(() => {
+    if (!presenting) return;
+    setElapsed(0);
+    const t = setInterval(() => setElapsed((s) => s + 1), 1000);
+    return () => clearInterval(t);
+  }, [presenting]);
+
+  const startPresenting = (asPresenter: boolean) => {
+    setPresenter(asPresenter);
+    setPresenting(true);
+  };
 
   // Keep the selection valid as the deck changes.
   React.useEffect(() => {
@@ -184,8 +204,11 @@ export function SlideDeck({ slides, onChange }: { slides: Slide[]; onChange?: (s
     <div>
       {/* toolbar */}
       <div className="mb-3 flex flex-wrap items-center gap-1.5 no-print">
-        <Button variant="secondary" size="sm" onClick={() => setPresenting(true)}>
+        <Button variant="secondary" size="sm" onClick={() => startPresenting(false)}>
           <Play className="h-4 w-4" /> Present
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => startPresenting(true)}>
+          <MonitorPlay className="h-4 w-4" /> Presenter view
         </Button>
         {editable && (
           <>
@@ -334,20 +357,69 @@ export function SlideDeck({ slides, onChange }: { slides: Slide[]; onChange?: (s
       </div>
 
       {presenting && (
-        <div className="fixed inset-0 z-[120] flex flex-col bg-ink/95">
-          <div className="flex items-center justify-between px-4 py-2 text-canvas/80">
-            <span className="text-meta tnum">
-              {idx + 1} / {slides.length}
+        <div className="fixed inset-0 z-[120] flex flex-col bg-ink/95 text-canvas">
+          <div className="flex items-center justify-between gap-3 px-4 py-2 text-canvas/80">
+            <span className="flex items-center gap-2.5 text-meta tnum">
+              <span aria-label="Elapsed time">{mmss(elapsed)}</span>
+              <span aria-hidden className="text-canvas/40">·</span>
+              <span aria-label="Slide position">
+                {idx + 1} / {slides.length}
+              </span>
             </span>
-            <button onClick={() => setPresenting(false)} aria-label="Exit presentation" className="rounded p-1.5 hover:bg-canvas/10">
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-          <div className="flex flex-1 items-center justify-center px-4 pb-8">
-            <div className="w-full max-w-[1100px]">
-              <SlideCanvas slide={slides[Math.min(idx, slides.length - 1)]} index={idx} total={slides.length} present />
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPresenter((p) => !p)}
+                className="rounded px-2 py-1 text-meta font-medium hover:bg-canvas/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-canvas/40"
+              >
+                {presenter ? "Audience view" : "Presenter view"}
+              </button>
+              <button onClick={() => setPresenting(false)} aria-label="Exit presentation" className="rounded p-1.5 hover:bg-canvas/10">
+                <X className="h-5 w-5" />
+              </button>
             </div>
           </div>
+
+          {presenter ? (
+            <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 px-4 pb-3 md:grid-cols-[1.65fr_1fr]">
+              <div className="flex min-w-0 flex-col justify-center">
+                <p className="mb-1.5 text-meta uppercase tracking-wide text-canvas/50">Current</p>
+                <div className="overflow-hidden rounded-card">
+                  <SlideCanvas slide={current} index={idx} total={slides.length} />
+                </div>
+              </div>
+              <div className="flex min-h-0 flex-col gap-3">
+                <div>
+                  <p className="mb-1.5 text-meta uppercase tracking-wide text-canvas/50">Next</p>
+                  {slides[idx + 1] ? (
+                    <div className="overflow-hidden rounded-card opacity-90">
+                      <SlideCanvas slide={slides[idx + 1]} index={idx + 1} total={slides.length} />
+                    </div>
+                  ) : (
+                    <div className="flex aspect-[16/9] items-center justify-center rounded-card border border-canvas/20 text-sm text-canvas/50">
+                      End of deck
+                    </div>
+                  )}
+                </div>
+                <div
+                  role="region"
+                  aria-label="Speaker notes"
+                  className="min-h-0 flex-1 overflow-y-auto rounded-card border border-canvas/15 bg-canvas/[0.04] p-3"
+                >
+                  <p className="mb-1 text-meta uppercase tracking-wide text-canvas/50">Speaker notes</p>
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-canvas/90">
+                    {current.speakerNotes?.trim() || "No notes for this slide."}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-1 items-center justify-center px-4 pb-8">
+              <div className="w-full max-w-[1100px]">
+                <SlideCanvas slide={current} index={idx} total={slides.length} present />
+              </div>
+            </div>
+          )}
+
           <div className="flex items-center justify-center gap-3 pb-6">
             <Button variant="secondary" size="sm" onClick={() => go(-1)} disabled={idx === 0}>
               <ChevronLeft className="h-4 w-4" /> Back

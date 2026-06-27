@@ -76,6 +76,31 @@ test.describe("Intelligence + Create services (demo mode)", () => {
     await expect(page.getByRole("button", { name: "Exit presentation" })).toHaveCount(0);
   });
 
+  test("Present: presenter view shows notes, a clock, slide position, and a clean-audience toggle", async ({ page }) => {
+    await page.goto("/present");
+    await page.getByRole("textbox").first().fill("A short investor deck about shipping migrations faster and safer.");
+    await page.getByRole("button", { name: "Build presentation" }).click();
+    await expect(page.getByRole("heading", { name: "Slides" })).toBeVisible();
+
+    await page.getByRole("button", { name: "Presenter view" }).click();
+    await expect(page.getByRole("button", { name: "Exit presentation" })).toBeVisible();
+    // Presenter chrome: speaker notes, an elapsed clock, and the slide position.
+    await expect(page.getByRole("region", { name: "Speaker notes" })).toBeVisible();
+    await expect(page.getByLabel("Elapsed time")).toBeVisible();
+    await expect(page.getByLabel("Slide position")).toHaveText(/^1 \/ \d+$/);
+
+    // Advancing updates the position.
+    await page.keyboard.press("ArrowRight");
+    await expect(page.getByLabel("Slide position")).toHaveText(/^2 \/ \d+$/);
+
+    // Toggle to the clean audience view → the presenter-only notes pane is gone.
+    await page.getByRole("button", { name: "Audience view" }).click();
+    await expect(page.getByRole("region", { name: "Speaker notes" })).toHaveCount(0);
+
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("button", { name: "Exit presentation" })).toHaveCount(0);
+  });
+
   test("Compare renders a comparison table", async ({ page }) => {
     await page.goto("/compare");
     await page.getByRole("textbox").first().fill("Compare these two vendors.");
