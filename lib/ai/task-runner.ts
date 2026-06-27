@@ -103,7 +103,8 @@ async function tryModel(model: string, messages: ChatMessage[], meter: Meter, si
     model,
     messages,
     jsonMode: caps.jsonMode,
-    temperature: 0.4,
+    // Lower temperature → more faithful adherence to explicit instructions and the material.
+    temperature: 0.3,
     signal,
     onUsage: meter.onUsage,
   });
