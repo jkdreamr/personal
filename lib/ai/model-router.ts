@@ -28,14 +28,15 @@ export type ModelId = (typeof MODELS)[keyof typeof MODELS];
  * Extra free providers (separate rate-limit pools), tagged `provider::model`. All have $0 free
  * tiers. Only used when their key is configured; Harbor routes each task kind to the best fit.
  * - Groq / Cerebras: extremely fast inference (great for autocomplete + short tasks).
- * - Google Gemini 2.0 Flash: strong with a very large context window (great for long research/briefs).
+ * - Google Gemini 2.5 Flash: strong with a very large (1M-token) context window (great for long
+ *   research/briefs). On Google AI Studio's free tier. (2.0 Flash was shut down 2026-06-01.)
  */
 export const EXTRA_MODELS = {
   groq70b: "groq::llama-3.3-70b-versatile",
   groq8b: "groq::llama-3.1-8b-instant",
   cerebras70b: "cerebras::llama-3.3-70b",
   cerebras8b: "cerebras::llama3.1-8b",
-  gemini: "google::gemini-2.0-flash",
+  gemini: "google::gemini-2.5-flash",
 } as const;
 
 /**

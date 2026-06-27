@@ -101,7 +101,7 @@ Optional extra free providers (tagged `provider::model`, used only when their ke
 ```
 groq::llama-3.3-70b-versatile  groq::llama-3.1-8b-instant   # Groq — extremely fast (autocomplete, rewrites)
 cerebras::llama-3.3-70b        cerebras::llama3.1-8b        # Cerebras — fastest inference
-google::gemini-2.0-flash                                    # Gemini — strong + 1M-token context (long docs)
+google::gemini-2.5-flash                                    # Gemini — strong + 1M-token context (long docs)
 mistral-small-latest                                        # Mistral — cross-provider last resort
 ```
 
@@ -166,6 +166,13 @@ Harbor must never incur per-token cost. Every model it can call is zero-priced �
 models (`owl-alpha` is a free stealth model; the rest are `:free` variants), plus the free tiers of
 Groq, Cerebras, Google AI Studio (Gemini), and Mistral. A hard guard (`assertFreeModel`, backed by a
 `FREE_ALLOWLIST`) refuses to call anything else. No paid APIs, databases, search, or analytics anywhere.
+
+**The real-world guarantee:** none of these providers can bill you unless you explicitly add a payment
+method and opt into a paid tier. With no card on file, the worst case is a rate-limit error, never a
+charge. So: keep OpenRouter on free credits (the models above are $0 regardless), and don't enable
+billing on Groq / Cerebras / Google AI Studio / Mistral. Verified $0 as of 2026-06: OpenRouter prompt/
+completion = 0 (live catalog); Groq & Cerebras free tiers (no card, rate-limited); Google AI Studio
+free tier (Flash models only — Pro is paid; we use `gemini-2.5-flash`); Mistral free "Experiment" tier.
 
 **Resilient, task-aware, cross-provider fallback.** Every generation degrades through free models so a
 single flaky one never errors. The chain is chosen per task (`chainFor(kind)`) and filtered to the

@@ -21,7 +21,7 @@ export const serverEnv = {
   mistralKey: process.env.MISTRAL_API_KEY?.trim() || "",
   groqKey: process.env.GROQ_API_KEY?.trim() || "", // very fast (LPU) — great for autocomplete
   cerebrasKey: process.env.CEREBRAS_API_KEY?.trim() || "", // fastest inference
-  geminiKey: process.env.GEMINI_API_KEY?.trim() || "", // Gemini 2.0 Flash — strong, 1M context
+  geminiKey: process.env.GEMINI_API_KEY?.trim() || "", // Gemini 2.5 Flash — strong, 1M context (free tier)
   betaAccessCode: process.env.BETA_ACCESS_CODE?.trim() || "",
   betaSessionSecret: process.env.BETA_SESSION_SECRET?.trim() || "",
   betaGateEnabled: bool(process.env.BETA_GATE_ENABLED, true),
