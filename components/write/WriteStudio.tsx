@@ -203,7 +203,6 @@ function Studio() {
             </div>
           </div>
           <WritingFontPicker />
-          <p className="text-meta text-muted">A clean document editor — format with the toolbar or ⌘B/I/U. Select text and Improve, or Continue from the end.</p>
         </div>
 
         {/* center: the editor */}
