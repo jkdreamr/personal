@@ -4,6 +4,10 @@ const nextConfig = {
   poweredByHeader: false,
   // Server-only Node deps used in route handlers must not be bundled for the edge/client.
   serverExternalPackages: ["cheerio"],
+  // Lint runs in CI (`npm run lint`); don't let a lint rule block a production deploy.
+  eslint: { ignoreDuringBuilds: true },
+  // Types are still fully checked (`npm run typecheck` + the build's own type pass).
+  typescript: { ignoreBuildErrors: false },
   experimental: {
     // pdfjs / tesseract are dynamically imported on the client only.
   },

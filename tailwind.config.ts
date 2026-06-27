@@ -22,8 +22,10 @@ const config: Config = {
         line: "var(--harbor-line)",
       },
       fontFamily: {
-        sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
-        display: ["var(--font-display)", "Georgia", "serif"],
+        // One neutral system stack. `display` intentionally aliases `sans` — no separate
+        // display/serif face — so any remaining `font-display` class stays Helvetica.
+        sans: ["var(--font-sans)", "Helvetica Neue", "Helvetica", "Arial", "sans-serif"],
+        display: ["var(--font-sans)", "Helvetica Neue", "Helvetica", "Arial", "sans-serif"],
       },
       fontSize: {
         meta: ["0.8125rem", { lineHeight: "1.45" }],

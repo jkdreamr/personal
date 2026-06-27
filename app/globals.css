@@ -3,6 +3,9 @@
 @tailwind utilities;
 
 :root {
+  /* One neutral, familiar system stack — legible and instant, not a "designed" AI font. */
+  --font-sans: "Helvetica Neue", Helvetica, Arial, "Segoe UI", Roboto, sans-serif;
+
   /* Harbor fixed palette */
   --harbor-canvas: #f7f7f7;
   --harbor-surface: #eeeeee;
