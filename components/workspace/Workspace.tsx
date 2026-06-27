@@ -15,6 +15,7 @@ import { Segmented } from "@/components/ui/segmented";
 import { useToast } from "@/components/ui/toast";
 import { ServiceIcon } from "@/components/ui/icon";
 import { AttachmentAdder } from "./AttachmentAdder";
+import { AttachmentList } from "./AttachmentList";
 import { ContextPanel } from "./ContextPanel";
 import { ArtifactBody } from "./ArtifactBody";
 import { SourcesPanel } from "./SourcesPanel";
@@ -108,21 +109,7 @@ export function Workspace({ serviceId, taskId, autorun }: { serviceId: ServiceId
           />
         </div>
 
-        {task.attachments.length > 0 && (
-          <ul className="mt-3 space-y-2">
-            {task.attachments.map((a) => (
-              <li key={a.id} className="flex items-center justify-between rounded-card border border-line bg-canvas px-3 py-2 text-sm">
-                <span className="truncate text-ink">{a.label}</span>
-                <button
-                  className="text-meta text-muted hover:text-ink"
-                  onClick={() => update({ attachments: task.attachments.filter((x) => x.id !== a.id) })}
-                >
-                  Remove
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+        <AttachmentList attachments={task.attachments} onChange={(a) => update({ attachments: a })} className="mt-3" />
 
         <div className="mt-6 flex items-center gap-3">
           <Button size="lg" onClick={() => run()} disabled={!canRun}>

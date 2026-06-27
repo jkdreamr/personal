@@ -1,80 +1,15 @@
 "use client";
 
 import * as React from "react";
-import { ChevronDown, FileText, Link2, Type, X, AlertTriangle, RotateCw } from "lucide-react";
-import type { Adjustments, Artifact, Attachment } from "@/lib/types";
+import { ChevronDown, RotateCw } from "lucide-react";
+import type { Adjustments, Attachment } from "@/lib/types";
 import type { ServiceConfig } from "@/lib/services";
-import { Badge, Eyebrow } from "@/components/ui/primitives";
+import { Eyebrow } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
 import { Textarea, Label } from "@/components/ui/field";
 import { AttachmentAdder } from "./AttachmentAdder";
+import { AttachmentList } from "./AttachmentList";
 import { cn } from "@/lib/utils";
-
-function AttachmentRow({
-  att,
-  onRemove,
-  onText,
-}: {
-  att: Attachment;
-  onRemove: () => void;
-  onText: (text: string) => void;
-}) {
-  const needsReview = Boolean(att.meta?.ocr || att.meta?.error);
-  const Icon = att.kind === "link" ? Link2 : att.kind === "text" ? Type : FileText;
-  return (
-    <li className="rounded-card border border-line bg-canvas p-2.5">
-      <div className="flex items-start gap-2">
-        <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted" />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm text-ink">{att.label}</p>
-          <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-            <Badge tone="neutral">{att.kind === "link" ? "Link" : att.kind === "text" ? "Text" : "File"}</Badge>
-            {att.meta?.ocr && (
-              <Badge tone={att.meta.lowConfidence ? "warning" : "neutral"}>
-                {att.meta.lowConfidence ? "Check the text" : "Read from image"}
-              </Badge>
-            )}
-            {att.kind === "link" && <span className="text-meta text-muted">read when you run</span>}
-          </div>
-        </div>
-        <button
-          onClick={onRemove}
-          aria-label={`Remove ${att.label}`}
-          className="shrink-0 rounded p-1 text-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/70"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      </div>
-
-      {att.meta?.previewDataUrl && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={att.meta.previewDataUrl} alt={`Preview of ${att.label}`} className="mt-2 max-h-40 w-full rounded-md border border-line object-contain" />
-      )}
-
-      {att.meta?.error && (
-        <p className="mt-2 flex items-start gap-1.5 text-meta text-warning">
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          {att.meta.error}
-        </p>
-      )}
-
-      {needsReview && (
-        <div className="mt-2">
-          <Label htmlFor={`att-${att.id}`} className="text-meta text-muted">
-            Confirm the text before Harbor uses it
-          </Label>
-          <Textarea
-            id={`att-${att.id}`}
-            className="mt-1 min-h-[88px] text-sm"
-            value={att.text}
-            placeholder="Type or correct the text from this image…"
-            onChange={(e) => onText(e.target.value)}
-          />
-        </div>
-      )}
-    </li>
-  );
-}
 
 const TONE = ["Direct", "Professional", "Formal"];
 const LENGTH = ["Short", "Balanced", "Thorough"];
@@ -158,18 +93,7 @@ export function ContextPanel({
           <Eyebrow>Context</Eyebrow>
           {attachments.length > 0 && <span className="text-meta text-muted">{attachments.length} attached</span>}
         </div>
-        {attachments.length > 0 && (
-          <ul className="mt-2 space-y-2">
-            {attachments.map((a) => (
-              <AttachmentRow
-                key={a.id}
-                att={a}
-                onRemove={() => onAttachments(attachments.filter((x) => x.id !== a.id))}
-                onText={(text) => onAttachments(attachments.map((x) => (x.id === a.id ? { ...x, text } : x)))}
-              />
-            ))}
-          </ul>
-        )}
+        <AttachmentList attachments={attachments} onChange={onAttachments} className="mt-2" />
         <div className="mt-3">
           <AttachmentAdder
             attachments={attachments}

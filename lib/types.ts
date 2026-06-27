@@ -130,6 +130,10 @@ export type Attachment = {
     /** Data URL preview for images (kept local). */
     previewDataUrl?: string;
     error?: string;
+    /** The raw extracted/OCR'd text, preserved when the user edits `text` so the original is kept. */
+    rawText?: string;
+    /** True once the user has manually edited the extracted text. */
+    corrected?: boolean;
   };
 };
 

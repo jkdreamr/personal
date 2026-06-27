@@ -14,6 +14,7 @@ import { Eyebrow } from "@/components/ui/primitives";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/overlays";
 import dynamic from "next/dynamic";
 import { AttachmentAdder } from "@/components/workspace/AttachmentAdder";
+import { AttachmentList } from "@/components/workspace/AttachmentList";
 import { WritingFontPicker } from "@/components/editor/WritingFontPicker";
 import type { RichDoc } from "@/lib/richdoc/types";
 import { useToast } from "@/components/ui/toast";
@@ -174,16 +175,14 @@ function Studio() {
 
           <div>
             <Eyebrow>Context</Eyebrow>
-            {attachments.length > 0 && (
-              <ul className="mb-2 mt-2 space-y-1.5">
-                {attachments.map((a) => (
-                  <li key={a.id} className="flex items-center justify-between rounded-btn border border-line bg-canvas px-2.5 py-1.5 text-meta">
-                    <span className="truncate text-ink/80">{a.label}</span>
-                    <button className="text-muted hover:text-ink" onClick={() => { const next = attachments.filter((x) => x.id !== a.id); setAttachments(next); persist({ attachments: next }); }}>×</button>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <AttachmentList
+              attachments={attachments}
+              onChange={(a) => {
+                setAttachments(a);
+                persist({ attachments: a });
+              }}
+              className="mb-2 mt-2"
+            />
             <div className="mt-2">
               <AttachmentAdder attachments={attachments} onChange={(a) => { setAttachments(a); persist({ attachments: a }); }} compact />
             </div>
