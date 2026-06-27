@@ -30,7 +30,7 @@ const LAYOUT_LABEL: Record<string, string> = {
   closing: "Closing",
 };
 
-const SLIDE_FONT: React.CSSProperties = { fontFamily: "var(--writing-font, var(--font-sans))" };
+const SLIDE_FONT: React.CSSProperties = { fontFamily: "var(--font-sans)" };
 
 /** One slide rendered editorially. Sparse, strong hierarchy, generous whitespace. Clips overflow. */
 function SlideCanvas({ slide, index, total, present }: { slide: Slide; index: number; total: number; present?: boolean }) {

@@ -55,19 +55,16 @@ Tab falls through to list indentation (`priority: 1000`). `components/editor/use
 requests: a 650ms idle debounce + a ~9s heartbeat, suppressed during IME composition, selection,
 code/math nodes, blur, and streaming. Stale requests abort; failures are silent.
 
-## Writing fonts
+## Writing fonts (per-text)
 
 `lib/client/writing-fonts.ts` defines a small system-only font set (sans/serif/book/mono — zero
-downloads). `useWritingFont` persists the choice in the preferences store and applies it via a
-`--writing-font` CSS variable on the document root, consumed by `.ProseMirror` and `.prose-harbor`
-(the app chrome keeps `--font-sans`, so UI hierarchy is unaffected). `WritingFontInit` (in the app
-layout) applies it on every page; `WritingFontPicker` is the document-settings control.
-
-**Per-text font.** Beyond the document-wide choice, a `TextStyle` + `FontFamily` mark
-(`@tiptap/extension-{text-style,font-family}`) lets the writer apply one of the writing fonts to *just
-the current selection* via the toolbar **Font** dropdown (or reset to the document default). The mark
-lives in the canonical JSON; the deterministic markdown/text serializers pass the text through
-untouched (markdown can't express a font), so exports are unaffected.
+downloads, instant render). A `TextStyle` + `FontFamily` mark (`@tiptap/extension-{text-style,
+font-family}`) lets the writer apply one of these fonts to *just the current selection* via the
+toolbar **Font** dropdown ("Font for the selected text"), or reset it with "Default"
+(`unsetFontFamily`). The mark lives in the canonical JSON; the deterministic markdown/text serializers
+pass the text through untouched (markdown can't express a font), so exports are unaffected. There is
+intentionally **no** document-wide font setting — the app chrome and the document base both use
+`--font-sans`.
 
 ## Suggest (Grammarly-style editorial suggestions)
 
@@ -111,8 +108,8 @@ and are never a required choice.
 checklist round-trips, inline/block math, malformed-input safety, and legacy migration precedence.
 `tests/unit/writing-fonts.test.ts` covers font resolution. E2E (`write.spec.ts`, `editing.spec.ts`)
 cover toolbar/keyboard formatting, cursor-anchored autocomplete (Tab/Esc + list-indent fallthrough),
-the Improve-selection flow (visible highlight + exact replacement), per-text font, selection word
-count, and font persistence. `services.spec.ts` covers the editable Present deck (navigate / edit /
+the Improve-selection flow (visible highlight + exact replacement), per-text font, and selection word
+count. `services.spec.ts` covers the editable Present deck (navigate / edit /
 add / delete / undo / present-mode), the editable follow-up email that survives a reload, the
 "Common uses" starting-point chips, and a per-service smoke pass (Compare, Challenge, Research,
 Explain, Decide, Proposal, Brief, Notes draft entry).

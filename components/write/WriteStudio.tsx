@@ -15,7 +15,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/overlay
 import dynamic from "next/dynamic";
 import { AttachmentAdder } from "@/components/workspace/AttachmentAdder";
 import { AttachmentList } from "@/components/workspace/AttachmentList";
-import { WritingFontPicker } from "@/components/editor/WritingFontPicker";
 import type { RichDoc } from "@/lib/richdoc/types";
 import { useToast } from "@/components/ui/toast";
 
@@ -202,7 +201,6 @@ function Studio() {
               </select>
             </div>
           </div>
-          <WritingFontPicker />
         </div>
 
         {/* center: the editor */}
