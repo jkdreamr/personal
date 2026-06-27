@@ -117,6 +117,20 @@ test.describe("Write studio (demo mode)", () => {
     await expect(editor).not.toContainText("utilize");
   });
 
+  test("Suggest: a repeated word is replaced at the right occurrence only", async ({ page }) => {
+    await page.goto("/write");
+    const editor = page.getByRole("textbox", { name: "Document editor" });
+    await editor.click();
+    // "utilize" appears twice; the suggestion is anchored to the first by its before/after context.
+    await page.keyboard.type("We utilize A and we utilize B.");
+    await page.getByRole("button", { name: "Suggest" }).click();
+    const card = page.getByRole("listitem").filter({ hasText: "utilize" }).first();
+    await expect(card).toBeVisible({ timeout: 8000 });
+    await card.getByRole("button", { name: "Accept" }).click();
+    // Exactly the first occurrence changed; the second is left untouched (never the wrong sentence).
+    await expect(editor).toContainText("We use A and we utilize B.");
+  });
+
   test("inline font: apply a font to just the selected text", async ({ page }) => {
     await page.goto("/write");
     const editor = page.getByRole("textbox", { name: "Document editor" });

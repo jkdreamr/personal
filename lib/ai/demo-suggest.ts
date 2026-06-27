@@ -30,20 +30,26 @@ const SWAPS: { bad: RegExp; good: string; category: Suggestion["category"]; why:
 
 const OPENERS = /\b(In conclusion|It is important to note that|At the end of the day|Needless to say)\b/i;
 
+// Exact context immediately around a match → anchors the correct occurrence of a repeated word.
+function anchors(text: string, at: number, len: number): { before: string; after: string } {
+  return { before: text.slice(Math.max(0, at - 16), at), after: text.slice(at + len, at + len + 16) };
+}
+
 export function demoSuggest(text: string, goal?: string): SuggestResponse {
   const suggestions: Suggestion[] = [];
   const seen = new Set<string>();
   for (const s of SWAPS) {
     if (suggestions.length >= 12) break;
     const m = text.match(s.bad);
-    if (m && !seen.has(m[0].toLowerCase())) {
+    if (m && m.index != null && !seen.has(m[0].toLowerCase())) {
       seen.add(m[0].toLowerCase());
-      suggestions.push({ target: m[0], replacement: s.good, category: s.category, rationale: s.why });
+      suggestions.push({ target: m[0], replacement: s.good, category: s.category, rationale: s.why, ...anchors(text, m.index, m[0].length) });
     }
   }
   if (suggestions.length < 12) {
     const o = text.match(OPENERS);
-    if (o) suggestions.push({ target: o[0], replacement: "", category: "structure", rationale: "Cut the throat-clearing opener — lead with the point." });
+    if (o && o.index != null)
+      suggestions.push({ target: o[0], replacement: "", category: "structure", rationale: "Cut the throat-clearing opener — lead with the point.", ...anchors(text, o.index, o[0].length) });
   }
 
   const overall: string[] = ["Lead with your main point so a busy reader gets it in the first line."];

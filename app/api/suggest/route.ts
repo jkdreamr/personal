@@ -27,9 +27,10 @@ const SYSTEM = `You are a sharp, generous copy editor doing a thorough markup pa
 - ADDITIONS: where a point is thin or a transition is missing, suggest a sentence to ADD — phrase it as a replacement by copying the existing sentence into "target" and putting that same sentence PLUS the new one in "replacement", with category "addition".
 
 Return ONE JSON object only:
-{"suggestions":[{"target": "<an EXACT substring copied verbatim from the draft, at most ~18 words>", "replacement": "<the improved or extended text, or \\"\\" to delete>", "category": "clarity|concision|grammar|punctuation|word-choice|tone|style|flow|repetition|structure|specificity|consistency|addition", "rationale": "<one short, specific sentence>"}], "overall": ["<3-6 broader, document-level recommendations grounded in the goal and draft>"]}
+{"suggestions":[{"target": "<an EXACT substring copied verbatim from the draft, at most ~18 words>", "replacement": "<the improved or extended text, or \\"\\" to delete>", "category": "clarity|concision|grammar|punctuation|word-choice|tone|style|flow|repetition|structure|specificity|consistency|addition", "rationale": "<one short, specific sentence>", "before": "<the exact few words immediately BEFORE target in the draft>", "after": "<the exact few words immediately AFTER target>"}], "overall": ["<3-6 broader, document-level recommendations grounded in the goal and draft>"]}
 Rules:
 - Each "target" MUST be an exact, contiguous substring of the draft, copied character-for-character (so it can be located and replaced). Do NOT paraphrase the target.
+- ALWAYS include "before" and "after": the exact text (a few words, copied verbatim) immediately surrounding the target in the draft. This is essential when the target could appear more than once, so the edit lands on the right occurrence. Use "" only at the very start/end of the draft.
 - Offer as many genuinely useful suggestions as you find, up to 16. Don't hold back, but don't pad with non-improvements either — every suggestion must make the writing better.
 - Vary the categories; don't return a dozen of the same kind.
 - Never invent facts; for any factual wording, prefer safer phrasing and note it.

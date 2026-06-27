@@ -7,7 +7,8 @@ import { streamCompose } from "@/lib/client/compose";
 import { fetchSuggestions } from "@/lib/client/suggest";
 import { lintText, type StyleWarning } from "@/lib/editorial/style-lint";
 import { markdownToDoc, toProseMirrorDoc, docToText, isDocEmpty, type RichDoc } from "@/lib/richdoc";
-import { findRange } from "@/lib/richdoc/find-range";
+import { findAnchoredRange } from "@/lib/richdoc/find-range";
+import { suggestionMarksKey } from "@/lib/richdoc/suggestion-marks";
 import { RichDocumentEditor, type RichEditorChange } from "./RichDocumentEditor";
 import { useGhostText } from "./useGhostText";
 import { SuggestPanel, type ActiveSuggestion } from "./SuggestPanel";
@@ -284,13 +285,32 @@ export function Composer({
     editor.commands.setSuggestionRanges(ranges);
   }, []);
 
-  // Re-locate each suggestion's target in the current document → active range or stale.
-  const resolve = React.useCallback((items: ActiveSuggestion[]): ActiveSuggestion[] => {
+  // Initial placement after a fetch: locate each target at the CORRECT occurrence using its
+  // before/after anchors, so a repeated phrase never marks (or later edits) the wrong sentence.
+  const resolveInitial = React.useCallback((items: ActiveSuggestion[]): ActiveSuggestion[] => {
     const editor = editorRef.current;
     if (!editor) return items;
     return items.map((s) => {
-      const r = findRange(editor, s.target);
+      const r = findAnchoredRange(editor, s.target, { before: s.before, after: s.after });
       return r ? { ...s, from: r.from, to: r.to, status: "active" as const } : { ...s, from: undefined, to: undefined, status: "stale" as const };
+    });
+  }, []);
+
+  // Ongoing: trust ProseMirror's transaction mapping. Read each suggestion's CURRENT range from the
+  // marker plugin (mapped through every edit — no re-search, so it can never jump to a different
+  // occurrence) and verify the text under it still equals the target; otherwise it's stale.
+  const mapAndVerify = React.useCallback((items: ActiveSuggestion[]): ActiveSuggestion[] => {
+    const editor = editorRef.current;
+    if (!editor) return items;
+    const mapped = suggestionMarksKey.getState(editor.state) ?? [];
+    const byId = new Map(mapped.map((r) => [r.id, r] as const));
+    return items.map((s) => {
+      const r = byId.get(s.id);
+      if (!r) return { ...s, from: undefined, to: undefined, status: "stale" as const };
+      const text = editor.state.doc.textBetween(r.from, r.to, "\n");
+      return text === s.target
+        ? { ...s, from: r.from, to: r.to, status: "active" as const }
+        : { ...s, from: undefined, to: undefined, status: "stale" as const };
     });
   }, []);
 
@@ -309,7 +329,7 @@ export function Composer({
     suggestCtl.current = c;
     const res = await fetchSuggestions({ text, goal, context, tone: tone || undefined, length: length || undefined }, c.signal);
     if (c.signal.aborted) return;
-    const resolved = resolve(res.suggestions.map((s) => ({ ...s, id: uid(), status: "active" as const })));
+    const resolved = resolveInitial(res.suggestions.map((s) => ({ ...s, id: uid(), status: "active" as const })));
     setSuggestions(resolved);
     setSuggestOverall(res.overall);
     setSuggestLoading(false);
@@ -319,9 +339,9 @@ export function Composer({
   const acceptSuggestion = (id: string) => {
     const editor = editorRef.current;
     const s = suggestions.find((x) => x.id === id);
-    if (!editor || !s) return;
-    const r = findRange(editor, s.target);
-    if (!r) {
+    if (!editor || !s || s.status !== "active" || s.from == null || s.to == null) return;
+    // Guard: the text under the mapped range must still be exactly the target before we replace it.
+    if (editor.state.doc.textBetween(s.from, s.to, "\n") !== s.target) {
       setSuggestions((cur) => {
         const next = cur.map((x) => (x.id === id ? { ...x, status: "stale" as const, from: undefined, to: undefined } : x));
         applyRanges(next);
@@ -329,10 +349,11 @@ export function Composer({
       });
       return;
     }
-    // Exactly replace the range as one undoable transaction; preserves surrounding formatting.
-    editor.chain().focus().insertContentAt({ from: r.from, to: r.to }, s.replacement).run();
+    // Replace exactly that range as one undoable transaction; preserves surrounding formatting.
+    editor.chain().focus().insertContentAt({ from: s.from, to: s.to }, s.replacement).run();
+    // The insert remapped every other marker via the plugin; re-read their mapped ranges.
     setSuggestions((cur) => {
-      const next = resolve(cur.filter((x) => x.id !== id));
+      const next = mapAndVerify(cur.filter((x) => x.id !== id));
       applyRanges(next);
       return next;
     });
@@ -354,7 +375,8 @@ export function Composer({
     editorRef.current?.commands.clearSuggestionRanges();
   };
 
-  // Keep suggestion ranges/markers in sync as the user edits (and mark edited-away ones stale).
+  // Keep markers in sync as the user edits: re-read mapped ranges (never re-search) and mark
+  // edited-away suggestions stale.
   React.useEffect(() => {
     if (!editorInstance || !suggestOpen) return;
     let t: ReturnType<typeof setTimeout> | null = null;
@@ -362,7 +384,7 @@ export function Composer({
       if (t) clearTimeout(t);
       t = setTimeout(() => {
         setSuggestions((cur) => {
-          const next = resolve(cur);
+          const next = mapAndVerify(cur);
           applyRanges(next);
           return next;
         });
@@ -373,7 +395,7 @@ export function Composer({
       editorInstance.off("update", onUpd);
       if (t) clearTimeout(t);
     };
-  }, [editorInstance, suggestOpen, resolve, applyRanges]);
+  }, [editorInstance, suggestOpen, mapAndVerify, applyRanges]);
 
   // Hover card lifecycle: a small close delay lets the pointer travel from the underline into the
   // card (to click Accept) without it vanishing.

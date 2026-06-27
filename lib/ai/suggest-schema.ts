@@ -31,6 +31,13 @@ export const suggestionSchema = z.object({
   category: z.enum(SUGGESTION_CATEGORIES),
   /** One concise sentence on why. */
   rationale: z.string().min(1).max(300),
+  /**
+   * Exact text immediately BEFORE/AFTER `target` in the draft. Used to anchor the correct occurrence
+   * when `target` is a repeated phrase, so the edit never lands on the wrong instance. Optional —
+   * resolution falls back to a unique match, and drops the suggestion if it stays ambiguous.
+   */
+  before: z.string().max(120).optional(),
+  after: z.string().max(120).optional(),
 });
 
 export const suggestResponseSchema = z.object({
