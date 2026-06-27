@@ -72,12 +72,16 @@ export function streamCompose(input: ComposeInput, events: ComposeEvents): Abort
 }
 
 /** Optional ghost-text suggestion (single short continuation). Returns "" on any failure. */
-export async function fetchGhost(paragraph: string, goal?: string, signal?: AbortSignal): Promise<string> {
+export async function fetchGhost(
+  paragraph: string,
+  opts?: { goal?: string; suffix?: string },
+  signal?: AbortSignal
+): Promise<string> {
   try {
     const res = await fetch("/api/autocomplete", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ paragraph, goal }),
+      body: JSON.stringify({ paragraph, goal: opts?.goal, suffix: opts?.suffix }),
       signal,
     });
     if (!res.ok) return "";

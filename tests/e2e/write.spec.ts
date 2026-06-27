@@ -70,6 +70,21 @@ test.describe("Write studio (demo mode)", () => {
     await expect(editor.locator(".rd-ghost-text")).toHaveCount(0);
   });
 
+  test("autocomplete also offers a completion mid-text, fitted safely before the following sentence", async ({ page }) => {
+    await page.goto("/write");
+    const editor = page.getByRole("textbox", { name: "Document editor" });
+    await editor.click();
+    // Put a sentence in the block, then place the caret BETWEEN two sentences.
+    await page.keyboard.type("The team is happy.");
+    await page.keyboard.press("Home");
+    await page.keyboard.type("We shipped the new editor. ");
+    // The caret now sits after "editor. " with a suffix → a natural mid-text pause.
+    await expect(editor.locator(".rd-ghost-text")).toBeVisible({ timeout: 6000 });
+    await page.keyboard.press("Tab");
+    // Bridge inserted between the sentences; the following sentence is intact and not duplicated.
+    await expect(editor).toContainText("We shipped the new editor. Here's why that matters. The team is happy.");
+  });
+
   test("Suggest: analyzes the draft, shows suggestions + inline markers, and accepts an exact patch", async ({ page }) => {
     await page.goto("/write");
     const editor = page.getByRole("textbox", { name: "Document editor" });
