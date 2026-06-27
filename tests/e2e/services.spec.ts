@@ -6,6 +6,28 @@ async function pasteText(page: import("@playwright/test").Page, text: string) {
   await page.getByRole("button", { name: "Add text" }).click();
 }
 
+test.describe("Existing-draft entry (demo mode)", () => {
+  test("paste a draft and improve it instead of starting from scratch (Notes)", async ({ page }) => {
+    await page.goto("/notes");
+    // Switch to the draft start-state.
+    await page.getByRole("tab", { name: "I already have a draft" }).click();
+    const draft = page.getByRole("textbox", { name: "Your draft" });
+    await expect(draft).toBeVisible();
+    await draft.fill("PROJECTALPHA shipped the new editor. Risk: the timeline slipped a week. Next: tell the team on Friday.");
+    // The CTA is service-specific.
+    await page.getByRole("button", { name: "Organize my notes" }).click();
+    // The result is built from the user's own draft.
+    const result = page.locator("article.print-document");
+    await expect(result).toBeVisible();
+    await expect(result).toContainText(/PROJECTALPHA|timeline|Friday/i);
+  });
+
+  test("draft entry is not offered for analysis services (Verify)", async ({ page }) => {
+    await page.goto("/verify");
+    await expect(page.getByRole("tab", { name: "I already have a draft" })).toHaveCount(0);
+  });
+});
+
 test.describe("Intelligence + Create services (demo mode)", () => {
   test("Present builds a slide deck preview with a Present button", async ({ page }) => {
     await page.goto("/present");

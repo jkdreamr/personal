@@ -178,6 +178,8 @@ export type Task = {
   attachments: Attachment[];
   adjustments: Adjustments;
   artifact?: Artifact;
+  /** The user's existing draft (when they chose "I already have a draft" for a draft-capable service). */
+  draft?: string;
   /**
    * Canonical user-edited body as a rich document (ProseMirror JSON). Source of truth for edits.
    * Kept separate from the artifact so regeneration doesn't clobber manual work.

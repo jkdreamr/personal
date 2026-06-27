@@ -39,6 +39,7 @@ const bodySchema = z.object({
     })
     .default({}),
   voiceProfile: z.any().optional(),
+  draft: z.string().max(40000).optional(),
 });
 
 function ndjson(obj: unknown): Uint8Array {
@@ -161,6 +162,7 @@ export async function POST(req: NextRequest) {
             sources,
             adjustments: parsed.adjustments,
             voiceProfile: parsed.adjustments.useVoiceProfile ? parsed.voiceProfile : null,
+            draft: parsed.draft,
             signal,
           },
           demo

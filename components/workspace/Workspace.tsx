@@ -7,7 +7,7 @@ import type { ServiceId } from "@/lib/services";
 import { SERVICES } from "@/lib/services";
 import { useTask } from "@/hooks/useTask";
 import { duplicateTask } from "@/lib/db/tasks";
-import { relativeTime } from "@/lib/utils";
+import { relativeTime, cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/field";
 import { Skeleton, Spinner } from "@/components/ui/primitives";
@@ -29,6 +29,7 @@ export function Workspace({ serviceId, taskId, autorun }: { serviceId: ServiceId
   const { toast } = useToast();
   const { task, loaded, status, stages, error, coverage, update, run, cancel, retry, refine, setError } = useTask(serviceId, taskId);
   const [pane, setPane] = React.useState<MobilePane>("work");
+  const [startMode, setStartMode] = React.useState<"fresh" | "draft">("fresh");
   const ranOnce = React.useRef(false);
 
   // Once a run starts (or a result exists), reflect the task id in the URL using the
@@ -82,41 +83,105 @@ export function Workspace({ serviceId, taskId, autorun }: { serviceId: ServiceId
           </span>
           <span className="text-sm font-medium text-muted">{service.label}</span>
         </div>
-        <h1 className="mt-5 text-2xl font-semibold leading-tight text-ink sm:text-[1.75rem]">{service.hero.heading}</h1>
-        {service.hero.helper && <p className="mt-2 text-base text-ink/65">{service.hero.helper}</p>}
+        {(() => {
+          const draftMode = service.capabilities.acceptsDraft && startMode === "draft";
+          const canStart = draftMode ? Boolean(task.draft?.trim()) : canRun;
+          return (
+            <>
+              <h1 className="mt-5 text-2xl font-semibold leading-tight text-ink sm:text-[1.75rem]">{service.hero.heading}</h1>
+              {service.hero.helper && !draftMode && <p className="mt-2 text-base text-ink/65">{service.hero.helper}</p>}
 
-        <div className="mt-6">
-          <Textarea
-            autoFocus
-            aria-label={service.hero.heading}
-            className="min-h-[110px] text-base"
-            placeholder={service.hero.placeholder}
-            value={task.goal}
-            onChange={(e) => update({ goal: e.target.value, title: e.target.value.slice(0, 60) || "Untitled" })}
-            onKeyDown={(e) => {
-              if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && canRun) run();
-            }}
-          />
-        </div>
+              {service.capabilities.acceptsDraft && (
+                <div role="tablist" aria-label="How to start" className="mt-5 inline-flex rounded-btn border border-line bg-surface p-0.5">
+                  {(
+                    [
+                      ["fresh", "Start from scratch"],
+                      ["draft", "I already have a draft"],
+                    ] as const
+                  ).map(([m, label]) => (
+                    <button
+                      key={m}
+                      role="tab"
+                      aria-selected={startMode === m}
+                      onClick={() => setStartMode(m)}
+                      className={cn(
+                        "rounded-[6px] px-3 py-1.5 text-meta font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/70",
+                        startMode === m ? "bg-canvas text-ink shadow-sm" : "text-muted hover:text-ink"
+                      )}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
 
-        <div className="mt-4">
-          <p className="mb-2 text-sm text-muted">Add what you have (optional)</p>
-          <AttachmentAdder
-            attachments={task.attachments}
-            onChange={(a) => update({ attachments: a })}
-            acceptsFiles={service.capabilities.acceptsFiles}
-            acceptsLinks={service.capabilities.acceptsLinks}
-          />
-        </div>
+              {draftMode ? (
+                <>
+                  <div className="mt-5">
+                    <Textarea
+                      autoFocus
+                      aria-label="Your draft"
+                      className="min-h-[220px] text-base"
+                      placeholder={service.draftPlaceholder ?? "Paste what you’ve already written…"}
+                      value={task.draft ?? ""}
+                      onChange={(e) => update({ draft: e.target.value, title: e.target.value.split("\n")[0]?.slice(0, 60) || "Untitled" })}
+                    />
+                  </div>
+                  <div className="mt-3">
+                    <label htmlFor="draft-focus" className="text-meta text-muted">
+                      Anything to focus on? (optional)
+                    </label>
+                    <Textarea
+                      id="draft-focus"
+                      className="mt-1 min-h-[44px] text-sm"
+                      placeholder="e.g. make it more concise; keep the tone formal"
+                      value={task.goal}
+                      onChange={(e) => update({ goal: e.target.value })}
+                      onKeyDown={(e) => {
+                        if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && canStart) run();
+                      }}
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="mt-6">
+                    <Textarea
+                      autoFocus
+                      aria-label={service.hero.heading}
+                      className="min-h-[110px] text-base"
+                      placeholder={service.hero.placeholder}
+                      value={task.goal}
+                      onChange={(e) => update({ goal: e.target.value, title: e.target.value.slice(0, 60) || "Untitled" })}
+                      onKeyDown={(e) => {
+                        if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && canStart) run();
+                      }}
+                    />
+                  </div>
 
-        <AttachmentList attachments={task.attachments} onChange={(a) => update({ attachments: a })} className="mt-3" />
+                  <div className="mt-4">
+                    <p className="mb-2 text-sm text-muted">Add what you have (optional)</p>
+                    <AttachmentAdder
+                      attachments={task.attachments}
+                      onChange={(a) => update({ attachments: a })}
+                      acceptsFiles={service.capabilities.acceptsFiles}
+                      acceptsLinks={service.capabilities.acceptsLinks}
+                    />
+                  </div>
 
-        <div className="mt-6 flex items-center gap-3">
-          <Button size="lg" onClick={() => run()} disabled={!canRun}>
-            {service.hero.button} <ArrowRight className="h-4 w-4" />
-          </Button>
-          <span className="text-meta text-muted">⌘↵ to start</span>
-        </div>
+                  <AttachmentList attachments={task.attachments} onChange={(a) => update({ attachments: a })} className="mt-3" />
+                </>
+              )}
+
+              <div className="mt-6 flex items-center gap-3">
+                <Button size="lg" onClick={() => run()} disabled={!canStart}>
+                  {draftMode ? service.draftCta ?? "Improve my draft" : service.hero.button} <ArrowRight className="h-4 w-4" />
+                </Button>
+                <span className="text-meta text-muted">⌘↵ to start</span>
+              </div>
+            </>
+          );
+        })()}
       </div>
     );
   }

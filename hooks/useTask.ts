@@ -113,6 +113,7 @@ export function useTask(serviceId: ServiceId, taskId?: string) {
           attachments: current.attachments,
           adjustments,
           voiceProfile: null,
+          draft: current.draft,
         },
         {
           onStage: (stage) =>

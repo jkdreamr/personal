@@ -18,6 +18,8 @@ export type RunTaskInput = {
   attachments: Attachment[];
   adjustments: Adjustments;
   voiceProfile?: VoiceProfile | null;
+  /** The user's existing draft to improve/organize/transform (draft-capable services). */
+  draft?: string;
 };
 
 /**

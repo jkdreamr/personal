@@ -82,12 +82,13 @@ export function generateDemoArtifact(opts: {
   goal: string;
   attachments: Attachment[];
   adjustments: Adjustments;
+  draft?: string;
 }): Artifact {
-  const { service, goal, attachments } = opts;
-  // Prefer attached material; if none, a substantive sentence can itself be the material
-  // (common when someone types their notes straight into the box).
+  const { service, goal, attachments, draft } = opts;
+  // The user's own draft is the primary material when supplied; otherwise prefer attached material;
+  // otherwise a substantive sentence can itself be the material.
   const attachedText = gatherText(attachments);
-  const text = attachedText || (goal.trim().length > 40 ? goal.trim() : "");
+  const text = draft?.trim() || attachedText || (goal.trim().length > 40 ? goal.trim() : "");
   const has = text.length > 0;
   const ideas = has ? keyIdeas(text) : [];
   const steps = has ? nextSteps(text) : [];

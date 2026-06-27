@@ -18,6 +18,8 @@ export type RunInput = {
   sources: Source[];
   adjustments: Adjustments;
   voiceProfile?: VoiceProfile | null;
+  /** The user's existing draft to improve/organize/transform (draft-capable services). */
+  draft?: string;
   signal?: AbortSignal;
 };
 
@@ -137,6 +139,7 @@ export async function runTask(input: RunInput, demo: boolean): Promise<RunResult
         goal: input.goal,
         attachments: input.attachments,
         adjustments: input.adjustments,
+        draft: input.draft,
       }),
       modelUsed: "demo",
     };
@@ -149,6 +152,7 @@ export async function runTask(input: RunInput, demo: boolean): Promise<RunResult
     sources: input.sources,
     adjustments: input.adjustments,
     voiceProfile: input.voiceProfile,
+    draft: input.draft,
   });
 
   // Task-aware, provider-aware chain. A full service generation is "synthesis" led by the service's

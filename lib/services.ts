@@ -60,7 +60,13 @@ export type ServiceConfig = {
     /** Show "Continue writing" in the editor (prose services where extending the text fits).
      *  "Improve selection" is offered everywhere; Continue only where appending prose makes sense. */
     editorContinue: boolean;
+    /** Offer an "I already have a draft" start state (services where the user often has existing text
+     *  to improve/organize/transform — not analysis services like Research/Verify/Compare/Decide). */
+    acceptsDraft: boolean;
   };
+  /** CTA + placeholder for the "I already have a draft" start state (when acceptsDraft). */
+  draftCta?: string;
+  draftPlaceholder?: string;
 };
 
 export const SERVICE_GROUPS: { id: ServiceGroup; label: string }[] = [
@@ -80,6 +86,7 @@ const base = {
   sensitive: false,
   editorial: false,
   editorContinue: false,
+  acceptsDraft: false,
 };
 
 export const SERVICES: Record<ServiceId, ServiceConfig> = {
@@ -114,7 +121,9 @@ export const SERVICES: Record<ServiceId, ServiceConfig> = {
     model: "fast",
     refinements: ["Make a checklist", "Make it a plan", "Pull out decisions", "Make it shorter"],
     modes: ["Clean notes", "Structured plan", "Checklist", "Meeting summary"],
-    capabilities: { ...base, editorContinue: true },
+    draftCta: "Organize my notes",
+    draftPlaceholder: "Paste the notes you’ve already written and Harbor will organize them…",
+    capabilities: { ...base, editorContinue: true, acceptsDraft: true },
   },
   present: {
     id: "present",
@@ -130,7 +139,9 @@ export const SERVICES: Record<ServiceId, ServiceConfig> = {
     },
     model: "primary",
     refinements: ["Fewer slides", "More evidence", "Sharper opening", "Stronger close"],
-    capabilities: { ...base, producesSlides: true, editorial: true },
+    draftCta: "Turn my draft into a deck",
+    draftPlaceholder: "Paste what you’ve written and Harbor will shape it into a slide storyline…",
+    capabilities: { ...base, producesSlides: true, editorial: true, acceptsDraft: true },
   },
   proposal: {
     id: "proposal",
@@ -146,7 +157,9 @@ export const SERVICES: Record<ServiceId, ServiceConfig> = {
     },
     model: "primary",
     refinements: ["Tighten scope", "Add a timeline", "Add pricing structure", "Draft the cover email"],
-    capabilities: { ...base, usesResearch: true, producesEmail: true, editorial: true, editorContinue: true },
+    draftCta: "Polish my proposal",
+    draftPlaceholder: "Paste your proposal draft and Harbor will sharpen and structure it…",
+    capabilities: { ...base, usesResearch: true, producesEmail: true, editorial: true, editorContinue: true, acceptsDraft: true },
   },
   research: {
     id: "research",
@@ -244,7 +257,9 @@ export const SERVICES: Record<ServiceId, ServiceConfig> = {
     },
     model: "primary",
     refinements: ["Questions to ask", "Likely concerns", "Talking points", "Follow-up email"],
-    capabilities: { ...base, usesResearch: true, producesEmail: true, editorial: true, editorContinue: true },
+    draftCta: "Prep from my notes",
+    draftPlaceholder: "Paste your meeting notes or agenda and Harbor will turn them into prep…",
+    capabilities: { ...base, usesResearch: true, producesEmail: true, editorial: true, editorContinue: true, acceptsDraft: true },
   },
   decide: {
     id: "decide",

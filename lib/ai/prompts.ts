@@ -113,11 +113,20 @@ export function buildContext(opts: {
   sources: Source[];
   adjustments: Adjustments;
   voiceProfile?: VoiceProfile | null;
+  draft?: string;
 }): string {
-  const { service, goal, attachments, sources, adjustments, voiceProfile } = opts;
+  const { service, goal, attachments, sources, adjustments, voiceProfile, draft } = opts;
   const blocks: string[] = [];
 
   blocks.push(`TASK: ${goal || "(no sentence provided — infer a sensible default and state it as an assumption)"}`);
+
+  // When the user supplied their OWN existing draft, it is the primary material: improve/organize/
+  // transform THEIR work rather than starting over. Preserve their content, facts, and intent.
+  if (draft?.trim()) {
+    blocks.push(
+      `THE USER'S EXISTING DRAFT (this is the primary material — build on it, do not start from scratch; preserve their content, structure, facts, and intent, and improve/organize/transform it for this service):\n${draft.trim().slice(0, 24000)}`
+    );
+  }
 
   // Honor explicit output requirements the user typed in the task ("what to write") OR in short
   // pasted context — length, structure (bullets/table/prose), language, reading level, point of view.
@@ -174,6 +183,7 @@ export function buildMessages(opts: {
   sources: Source[];
   adjustments: Adjustments;
   voiceProfile?: VoiceProfile | null;
+  draft?: string;
 }): ChatMessage[] {
   const service = SERVICES[opts.serviceId];
   return [
