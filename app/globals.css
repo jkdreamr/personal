@@ -242,11 +242,12 @@
     height: 0;
     pointer-events: none;
   }
-  /* Cursor-anchored ghost autocomplete decoration (added in the autocomplete slice). */
-  .rich-editor .ProseMirror .rd-ghost::after {
-    content: attr(data-ghost);
+  /* Cursor-anchored ghost autocomplete: a subdued grey continuation rendered at the caret. */
+  .rich-editor .ProseMirror .rd-ghost-text {
     color: var(--harbor-muted-soft);
     pointer-events: none;
+    user-select: none;
+    white-space: pre-wrap;
   }
   /* Persistent "about to change this" highlight for Improve selection. */
   .rich-editor .ProseMirror .rd-improve-target {

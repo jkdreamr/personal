@@ -7,6 +7,7 @@ import { streamCompose } from "@/lib/client/compose";
 import { lintText, type StyleWarning } from "@/lib/editorial/style-lint";
 import { markdownToDoc, toProseMirrorDoc, docToText, isDocEmpty, type RichDoc } from "@/lib/richdoc";
 import { RichDocumentEditor, type RichEditorChange } from "./RichDocumentEditor";
+import { useGhostText } from "./useGhostText";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/primitives";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/overlays";
@@ -68,6 +69,7 @@ export function Composer({
     []
   );
   const editorRef = React.useRef<Editor | null>(null);
+  const [editorInstance, setEditorInstance] = React.useState<Editor | null>(null);
   const [streaming, setStreaming] = React.useState(false);
   const [streamText, setStreamText] = React.useState("");
   const [hints, setHints] = React.useState<StyleWarning[]>(() => lintText(docToText(seedDoc)));
@@ -122,10 +124,14 @@ export function Composer({
   const onReady = React.useCallback(
     (editor: Editor) => {
       editorRef.current = editor;
+      setEditorInstance(editor);
       maybeAutoRun();
     },
     [maybeAutoRun]
   );
+
+  // Cursor-anchored ghost autocomplete (paused while a stream is running).
+  useGhostText(editorInstance, { goal, enabled: !streaming });
 
   // ---- streaming Write / Continue / Improve --------------------------------
 
@@ -387,7 +393,7 @@ export function Composer({
                 </PopoverContent>
               </Popover>
             )}
-            {actions.includes("improve") && <span className="text-meta text-muted">Select text, then Improve · ⌘B/I/U to format</span>}
+            <span className="text-meta text-muted">Suggestions appear as you write — Tab to accept · select text to Improve</span>
           </>
         )}
       </div>

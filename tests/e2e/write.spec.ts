@@ -49,6 +49,36 @@ test.describe("Write studio (demo mode)", () => {
     await expect(editor.locator("ul li")).toHaveCount(1);
   });
 
+  test("cursor-anchored autocomplete: ghost appears mid-writing, Tab accepts, Esc dismisses", async ({ page }) => {
+    await page.goto("/write");
+    const editor = page.getByRole("textbox", { name: "Document editor" });
+    await editor.click();
+    await page.keyboard.type("Here is a quick note to the whole team and");
+    // A grey ghost suggestion appears at the caret (demo provides a deterministic continuation).
+    await expect(editor.locator(".rd-ghost-text")).toBeVisible({ timeout: 6000 });
+    // Tab accepts it.
+    await page.keyboard.press("Tab");
+    await expect(editor).toContainText("what we should do next.");
+    await expect(editor.locator(".rd-ghost-text")).toHaveCount(0);
+    // Type more; a fresh suggestion appears, and Escape dismisses it without inserting.
+    await page.keyboard.type(" We should align on the timing for");
+    await expect(editor.locator(".rd-ghost-text")).toBeVisible({ timeout: 6000 });
+    await page.keyboard.press("Escape");
+    await expect(editor.locator(".rd-ghost-text")).toHaveCount(0);
+  });
+
+  test("Tab indents a list when no suggestion is showing", async ({ page }) => {
+    await page.goto("/write");
+    const editor = page.getByRole("textbox", { name: "Document editor" });
+    await editor.click();
+    await page.getByRole("button", { name: "Bulleted list" }).click();
+    await page.keyboard.type("one"); // short text → no autocomplete fetch
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("two");
+    await page.keyboard.press("Tab"); // with no ghost, Tab indents (nested list)
+    await expect(editor.locator("ul ul")).toHaveCount(1);
+  });
+
   test("draft persists across a refresh", async ({ page }) => {
     await page.goto("/write");
     const editor = page.getByRole("textbox", { name: "Document editor" });
