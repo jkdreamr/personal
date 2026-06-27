@@ -17,10 +17,12 @@ describe("model routing", () => {
   it("routes an explicit second opinion to the reviewer model", () => {
     expect(routeModel("primary", "second_opinion")).toBe(MODELS.reviewer);
   });
-  it("never uses paid models or auto", () => {
+  it("never uses paid models or auto (free-tier models only)", () => {
     const ids = Object.values(MODELS);
     expect(ids).not.toContain("openrouter/auto");
-    expect(ids.every((m) => m.includes(":free") || m === "openrouter/owl-alpha")).toBe(true);
+    // `:free` OpenRouter models, the free owl-alpha stealth model, or Mistral's free-tier model.
+    const knownFree = new Set(["openrouter/owl-alpha", "mistral-small-latest"]);
+    expect(ids.every((m) => m.includes(":free") || knownFree.has(m))).toBe(true);
   });
   it("the free-model guard accepts our models and rejects paid ones", () => {
     for (const m of Object.values(MODELS)) {

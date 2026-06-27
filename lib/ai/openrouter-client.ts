@@ -2,11 +2,29 @@ import { serverEnv } from "@/lib/env";
 import { assertFreeModel } from "./model-router";
 
 /**
- * Minimal OpenRouter chat-completions client. Server-side only.
- * The API key never leaves the server. Uses the OpenAI-compatible path.
+ * Minimal multi-provider chat-completions client. Server-side only; keys never leave the server.
+ * Both OpenRouter and Mistral expose the same OpenAI-compatible path, so we just pick the right
+ * endpoint, key, and headers per model. Mistral (id `mistral-*`) is an optional free fallback.
  */
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+const MISTRAL_URL = "https://api.mistral.ai/v1/chat/completions";
+
+function isMistralModel(model: string): boolean {
+  return model.startsWith("mistral-") || model.startsWith("open-mistral") || model.startsWith("open-mixtral");
+}
+
+/** Resolve the endpoint URL, key, and provider-specific headers for a model. */
+function endpointFor(model: string): { url: string; key: string; headers: Record<string, string> } {
+  if (isMistralModel(model)) {
+    return { url: MISTRAL_URL, key: serverEnv.mistralKey, headers: {} };
+  }
+  return {
+    url: OPENROUTER_URL,
+    key: serverEnv.openRouterKey,
+    headers: { "HTTP-Referer": "https://harbor.app", "X-Title": "Harbor" },
+  };
+}
 
 export type ChatMessage = {
   role: "system" | "user" | "assistant";
@@ -46,8 +64,9 @@ function isRetryableStatus(status: number): boolean {
  * Throws ProviderError on failure (with a retryable flag for transient cases).
  */
 export async function chatComplete(req: ChatRequest): Promise<string> {
-  if (!serverEnv.openRouterKey) {
-    throw new ProviderError("No OpenRouter key configured.", 500, false);
+  const endpoint = endpointFor(req.model);
+  if (!endpoint.key) {
+    throw new ProviderError("No API key configured for this model's provider.", 500, false);
   }
   assertFreeModel(req.model); // hard guard: never incur per-token cost
 
@@ -71,14 +90,12 @@ export async function chatComplete(req: ChatRequest): Promise<string> {
 
   let res: Response;
   try {
-    res = await fetch(OPENROUTER_URL, {
+    res = await fetch(endpoint.url, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${serverEnv.openRouterKey}`,
+        Authorization: `Bearer ${endpoint.key}`,
         "Content-Type": "application/json",
-        // Optional attribution headers per OpenRouter docs.
-        "HTTP-Referer": "https://harbor.app",
-        "X-Title": "Harbor",
+        ...endpoint.headers,
       },
       body: JSON.stringify(body),
       signal: controller.signal,
@@ -121,8 +138,9 @@ export async function chatComplete(req: ChatRequest): Promise<string> {
  * words appear in ~1s instead of waiting for the whole response.
  */
 export async function chatCompleteStream(req: ChatRequest, onDelta: (text: string) => void): Promise<string> {
-  if (!serverEnv.openRouterKey) {
-    throw new ProviderError("No OpenRouter key configured.", 500, false);
+  const endpoint = endpointFor(req.model);
+  if (!endpoint.key) {
+    throw new ProviderError("No API key configured for this model's provider.", 500, false);
   }
   assertFreeModel(req.model); // hard guard: never incur per-token cost
 
@@ -135,13 +153,12 @@ export async function chatCompleteStream(req: ChatRequest, onDelta: (text: strin
 
   let res: Response;
   try {
-    res = await fetch(OPENROUTER_URL, {
+    res = await fetch(endpoint.url, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${serverEnv.openRouterKey}`,
+        Authorization: `Bearer ${endpoint.key}`,
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://harbor.app",
-        "X-Title": "Harbor",
+        ...endpoint.headers,
       },
       body: JSON.stringify({
         model: req.model,

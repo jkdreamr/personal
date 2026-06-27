@@ -16,6 +16,8 @@ export async function GET() {
       searchProvider: serverEnv.searchProvider,
       // The actual search engine in effect (e.g. "wikipedia", "brave", "none").
       search: getSearchAdapter().name,
+      // Whether the optional cross-provider (Mistral) fallback is configured.
+      mistralFallback: serverEnv.mistralKey.length > 0,
       envOk: env.ok,
       warnings: env.warnings,
     },

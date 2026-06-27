@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { isDemoMode } from "@/lib/env";
+import { isDemoMode, serverEnv } from "@/lib/env";
 import { chatCompleteStream, ProviderError } from "@/lib/ai/openrouter-client";
 import { MODELS, fallbackChain } from "@/lib/ai/model-router";
 import { recordCall } from "@/lib/ai/instrumentation";
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
   // "continue" and short "improve" prefer the fast model for low latency; full "write" prefers
   // Owl. Each degrades through the free fallback chain so a single flaky model never errors out.
   const preferred = body.mode === "write" ? MODELS.primary : MODELS.fast;
-  const chain = fallbackChain(preferred);
+  const chain = [...fallbackChain(preferred), ...(serverEnv.mistralKey ? [MODELS.mistral] : [])];
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {

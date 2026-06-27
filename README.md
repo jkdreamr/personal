@@ -146,6 +146,12 @@ Harbor must never incur per-token cost. All models are zero-priced on OpenRouter
 free stealth model; the others are `:free` variants), and a hard guard (`assertFreeModel`) refuses to
 call anything else. No paid APIs, databases, search, or analytics anywhere.
 
+**Resilient, cross-provider fallback.** Every generation degrades through free models so a single
+flaky one never errors: **Owl → GPT-OSS → Nemotron**, and optionally **→ Mistral** (a *different*
+provider with its own rate-limit pool) when `MISTRAL_API_KEY` is set. Mistral's free "Experiment"
+tier is $0 (no card, rate-limited) — keep your Mistral account on the free tier to stay at $0. This
+applies to both result generation (`/api/task`) and the writing editor (`/api/compose`).
+
 ## Unlimited, $0 web search (SearXNG)
 
 There is no key-less, *unlimited*, full-web search API that works from a server (Google/Bing/DuckDuckGo

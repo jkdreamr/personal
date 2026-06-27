@@ -15,14 +15,19 @@ export const MODELS = {
   fast: "openai/gpt-oss-120b:free",
   reviewer: "nvidia/nemotron-3-ultra-550b-a55b:free",
   restricted: "poolside/laguna-m.1:free",
+  // Optional cross-provider last-resort fallback (Mistral, different rate-limit pool). Free on
+  // Mistral's "Experiment" tier — only used when MISTRAL_API_KEY is set and all OpenRouter free
+  // models have failed. Keep your Mistral account on the free tier to stay at $0.
+  mistral: "mistral-small-latest",
 } as const;
 
 export type ModelId = (typeof MODELS)[keyof typeof MODELS];
 
 /**
- * Hard money safeguard. Harbor must NEVER incur per-token cost. Only the exact free models in
- * MODELS may be called (all verified $0 on OpenRouter: owl-alpha is a free stealth model; the
- * `:free` variants are zero-priced). A `:free` suffix is also accepted defensively.
+ * Hard money safeguard. Harbor must NEVER incur per-token cost. Only the exact models in MODELS
+ * may be called: owl-alpha is a free OpenRouter stealth model; the `:free` variants are zero-priced;
+ * `mistral-small-latest` is free on Mistral's Experiment tier (opt-in via MISTRAL_API_KEY). A
+ * `:free` suffix is also accepted defensively. Anything else is refused.
  */
 const FREE_ALLOWLIST: ReadonlySet<string> = new Set<string>(Object.values(MODELS));
 

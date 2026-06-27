@@ -16,6 +16,9 @@ function bool(value: string | undefined, fallback: boolean): boolean {
 
 export const serverEnv = {
   openRouterKey: process.env.OPENROUTER_API_KEY?.trim() || "",
+  // Optional cross-provider last-resort fallback (Mistral free "Experiment" tier — $0, separate
+  // rate-limit pool from OpenRouter). Only used when all OpenRouter free models fail.
+  mistralKey: process.env.MISTRAL_API_KEY?.trim() || "",
   betaAccessCode: process.env.BETA_ACCESS_CODE?.trim() || "",
   betaSessionSecret: process.env.BETA_SESSION_SECRET?.trim() || "",
   betaGateEnabled: bool(process.env.BETA_GATE_ENABLED, true),

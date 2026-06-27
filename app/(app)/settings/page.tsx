@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
 
-type Health = { demo: boolean; gateEnabled: boolean; dailyBudget: number; searchProvider: string; search: string };
+type Health = { demo: boolean; gateEnabled: boolean; dailyBudget: number; searchProvider: string; search: string; mistralFallback: boolean };
 
 function searchLabel(name: string): string {
   if (!name || name === "none") return "off";
@@ -80,6 +80,11 @@ export default function SettingsPage() {
           {health && (
             <p className="mt-3 border-t border-line pt-3 text-meta text-muted">
               Web search: <span className="text-ink">{searchLabel(health.search)}</span>
+            </p>
+          )}
+          {health && (
+            <p className="mt-2 text-meta text-muted">
+              Model fallback: <span className="text-ink">Owl → GPT-OSS → Nemotron{health.mistralFallback ? " → Mistral" : ""}</span>
             </p>
           )}
           {remaining !== null && (

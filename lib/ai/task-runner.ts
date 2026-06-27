@@ -1,5 +1,6 @@
 import type { ServiceId } from "@/lib/services";
 import { SERVICES } from "@/lib/services";
+import { serverEnv } from "@/lib/env";
 import type { Adjustments, Artifact, Attachment, Claim, Source, VoiceProfile } from "@/lib/types";
 import { uid } from "@/lib/utils";
 import { chatComplete, ProviderError, type ChatMessage } from "./openrouter-client";
@@ -154,7 +155,8 @@ export async function runTask(input: RunInput, demo: boolean): Promise<RunResult
     voiceProfile: input.voiceProfile,
   });
 
-  const chain = fallbackChain(preferred);
+  // Owl -> GPT-OSS -> Nemotron, then optional cross-provider Mistral (free) as a last resort.
+  const chain = [...fallbackChain(preferred), ...(serverEnv.mistralKey ? [MODELS.mistral] : [])];
   let lastError: unknown = null;
 
   // Owner-only instrumentation (no content stored).
