@@ -102,8 +102,9 @@ export function useTask(serviceId: ServiceId, taskId?: string) {
           : BASE_STAGES.map((s, i) => (i === 0 ? { ...s, state: "done" } : i === 1 ? { ...s, state: "active" } : s))
       );
 
-      // Mark running + persist so a refresh shows the saved context.
-      update({ state: "running", adjustments }, { immediate: true });
+      // Mark running + persist so a refresh shows the saved context. Clear any prior manual
+      // edit so a regenerate/refine actually shows the fresh result instead of the old edited body.
+      update({ state: "running", adjustments, editedBody: undefined }, { immediate: true });
 
       abortRef.current = runTaskStream(
         {

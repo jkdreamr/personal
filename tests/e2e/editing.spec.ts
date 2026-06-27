@@ -34,6 +34,24 @@ test.describe("Editing + regenerate on every tool (demo mode)", () => {
     await expect(page.getByRole("button", { name: "Continue", exact: true })).toHaveCount(0);
   });
 
+  test("regenerating after an edit shows the fresh result, not the old edited text", async ({ page }) => {
+    await page.goto("/brief");
+    await page.getByRole("textbox").first().fill("Brief the team on the Q3 plan, the risks, and the next steps.");
+    await page.getByRole("button", { name: "Create brief" }).click();
+    await expect(page.locator("article.print-document")).toBeVisible();
+
+    // Edit and replace the body with a unique marker.
+    await page.getByRole("button", { name: "Edit" }).click();
+    await page.getByPlaceholder(/Edit freely/).fill("ZZZMYEDITMARKER my own throwaway text");
+    await page.getByRole("button", { name: "Done editing" }).click();
+    await expect(page.getByText("ZZZMYEDITMARKER")).toBeVisible();
+
+    // Regenerate → the old edit must be gone, the new result shown.
+    await page.getByRole("button", { name: "Regenerate" }).click();
+    await expect(page.locator("article.print-document")).toBeVisible();
+    await expect(page.getByText("ZZZMYEDITMARKER")).toHaveCount(0);
+  });
+
   test("Regenerate re-runs and keeps the workspace", async ({ page }) => {
     await page.goto("/notes");
     await page.getByRole("textbox").first().fill("Turn these into a plan: call the bank, renew the lease, email the team.");

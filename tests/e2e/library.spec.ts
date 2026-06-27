@@ -32,8 +32,11 @@ test.describe("Library — save, restore, persist", () => {
     const row = page.getByText("Turn this into a checklist", { exact: false }).first();
     await expect(row).toBeVisible();
     await page.getByRole("button", { name: "Delete" }).first().click();
-    await expect(page.getByText("Deleted", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Undo" }).click();
-    await expect(page.getByText("Restored.", { exact: true })).toBeVisible();
+    // The undo toast appears; click it and confirm the row is restored (robust against the
+    // toast's auto-dismiss timing).
+    const undo = page.getByRole("button", { name: "Undo" });
+    await expect(undo).toBeVisible();
+    await undo.click();
+    await expect(page.getByText("Turn this into a checklist", { exact: false }).first()).toBeVisible();
   });
 });

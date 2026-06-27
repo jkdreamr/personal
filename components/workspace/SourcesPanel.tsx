@@ -100,7 +100,7 @@ function ClaimCard({ claim, sources, onOpenSource }: { claim: Claim; sources: So
 
 const TO_CONFIRM: Claim["classification"][] = ["unresolved_question", "not_sufficiently_supported"];
 
-export function SourcesPanel({ artifact, coverage }: { artifact: Artifact | undefined; coverage?: string | null }) {
+function SourcesPanelImpl({ artifact, coverage }: { artifact: Artifact | undefined; coverage?: string | null }) {
   const [openSource, setOpenSource] = React.useState<Source | null>(null);
   const [sheetOpen, setSheetOpen] = React.useState(false);
   const [expanded, setExpanded] = React.useState(false);
@@ -216,3 +216,7 @@ export function SourcesPanel({ artifact, coverage }: { artifact: Artifact | unde
     </div>
   );
 }
+
+/** Memoized: the artifact/coverage props are stable while the user edits the draft, so the
+ *  evidence panel doesn't re-render on every keystroke in the center editor. */
+export const SourcesPanel = React.memo(SourcesPanelImpl);
