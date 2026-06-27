@@ -68,13 +68,19 @@ intentionally **no** document-wide font setting — the app chrome and the docum
 
 ## Suggest (Grammarly-style editorial suggestions)
 
-A quiet **Suggest** control runs a careful editorial analysis (`/api/suggest`, ~10s) returning a
-structured, Zod-validated contract (`lib/ai/suggest-schema.ts`): each suggestion has an **exact target
-quote**, a replacement, a category (clarity/grammar/concision/tone/repetition/structure/specificity/
-consistency), and a rationale, plus document-level "overall direction". Targets are located in the doc
-via `lib/richdoc/find-range.ts` (per-block search) and marked inline by the `SuggestionMarks`
-decoration (`lib/richdoc/suggestion-marks.ts`, amber underline, remapped through edits). `SuggestPanel`
-lists them with Accept / Dismiss / Refresh — all real buttons (keyboard + touch, no hover-only).
+A quiet **Suggest** control runs a careful editorial analysis (`/api/suggest`) returning a structured,
+Zod-validated contract (`lib/ai/suggest-schema.ts`): each suggestion has an **exact target quote**, a
+replacement, a category (clarity / concision / grammar / punctuation / word-choice / tone / style /
+flow / repetition / structure / specificity / consistency / **addition**), and a rationale, plus
+document-level "overall direction". The prompt asks for a thorough markup (up to 16, de-duped), not
+just "the few most valuable"; an **addition** is expressed as a replacement that copies the existing
+sentence and appends a new one. Targets are located in the doc via `lib/richdoc/find-range.ts`
+(per-block search) and marked inline by the `SuggestionMarks` decoration
+(`lib/richdoc/suggestion-marks.ts`, amber underline, remapped through edits). `SuggestPanel` lists them
+with Accept / Dismiss / Refresh — all real buttons (keyboard + touch, no hover-only). **Hovering** an
+inline marker pops a `SuggestionHoverCard` anchored to it (the change + rationale + Accept/Dismiss),
+with a short close delay so the pointer can travel into the card; it's a convenience over the panel,
+never the only path.
 Accept replaces exactly the mapped range as one undoable transaction; on each edit the targets are
 re-resolved so a suggestion whose text changed is marked **stale** (Accept disabled, Refresh offered).
 Demo mode (`lib/ai/demo-suggest.ts`) returns deterministic local suggestions for testing.
