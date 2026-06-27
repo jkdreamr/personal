@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Sparkles, ArrowDown, Wand2, StopCircle } from "lucide-react";
+import { Sparkles, ArrowDown, Wand2, StopCircle, ChevronDown } from "lucide-react";
 import { streamCompose, fetchGhost } from "@/lib/client/compose";
 import { lintText, type StyleWarning } from "@/lib/editorial/style-lint";
 import { Button } from "@/components/ui/button";
@@ -12,11 +12,21 @@ import { cn } from "@/lib/utils";
 
 export type ComposerAction = "write" | "continue" | "improve";
 
+/** Improvement presets for "Improve selection" — the user picks the kind of change. */
+const IMPROVE_OPTIONS: { label: string; instruction: string }[] = [
+  { label: "Make it shorter", instruction: "Make this shorter and tighter without losing meaning." },
+  { label: "Make it longer", instruction: "Expand this with more useful detail and specifics; keep it on point." },
+  { label: "Make it clearer", instruction: "Make this clearer and more direct; simplify any awkward phrasing." },
+  { label: "Sound more human", instruction: "Rewrite this so it sounds natural and human — less stiff, less generic, like a real person wrote it. Keep the meaning and facts." },
+  { label: "More formal", instruction: "Make this more formal and professional." },
+  { label: "Warmer / more casual", instruction: "Make this warmer and more conversational, while staying professional." },
+];
+
 /**
- * A reusable cursor-style editor: ghost-text autocomplete (Tab/Esc), live local editorial hints,
- * and streaming Write / Continue / Improve-selection actions. Controlled by the parent (value +
- * onChange). Used by the Write studio AND by every tool's "Edit" mode, so editing and suggestions
- * work the same everywhere. Everything is testable in demo mode (compose/ghost stream locally).
+ * A reusable cursor-style editor: inline ghost-text autocomplete (light grey, Tab to accept,
+ * Esc to dismiss), live local editorial hints, and streaming Write / Continue / Improve actions.
+ * Controlled by the parent. Used by the Write studio AND every tool's "Edit" mode, so editing
+ * works identically everywhere. Fully testable in demo mode (compose/ghost stream locally).
  */
 export function Composer({
   value,
@@ -29,6 +39,7 @@ export function Composer({
   placeholder = "Start writing, or use the actions above…",
   minHeightClass = "min-h-[280px]",
   editorClassName,
+  autoRun,
   onStreamingChange,
 }: {
   value: string;
@@ -41,12 +52,14 @@ export function Composer({
   placeholder?: string;
   minHeightClass?: string;
   editorClassName?: string;
+  autoRun?: "write";
   onStreamingChange?: (streaming: boolean) => void;
 }) {
   const { toast } = useToast();
   const [ghost, setGhost] = React.useState("");
   const [hints, setHints] = React.useState<StyleWarning[]>([]);
   const [streaming, setStreaming] = React.useState(false);
+  const [improveOpen, setImproveOpen] = React.useState(false);
 
   const taRef = React.useRef<HTMLTextAreaElement>(null);
   const overlayRef = React.useRef<HTMLDivElement>(null);
@@ -54,6 +67,7 @@ export function Composer({
   const ghostCtl = React.useRef<AbortController | null>(null);
   const ghostTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const hintTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoRan = React.useRef(false);
   const valueRef = React.useRef(value);
   valueRef.current = value;
 
@@ -82,14 +96,14 @@ export function Composer({
     if (ghostTimer.current) clearTimeout(ghostTimer.current);
     ghostCtl.current?.abort();
     setGhost("");
-    if (!caretAtEnd || streaming || val.trim().length < 12) return;
+    if (!caretAtEnd || streaming || val.trim().length < 10) return;
     ghostTimer.current = setTimeout(async () => {
       const ctl = new AbortController();
       ghostCtl.current = ctl;
       const para = val.slice(val.lastIndexOf("\n\n") + 1);
       const s = await fetchGhost(para, goal, ctl.signal);
-      if (!ctl.signal.aborted && valueRef.current === val && s) setGhost(s.startsWith(" ") ? s : " " + s);
-    }, 950);
+      if (!ctl.signal.aborted && valueRef.current === val && s) setGhost(s.startsWith(" ") || /[\s([]$/.test(val) ? s : " " + s);
+    }, 850);
   };
 
   const handleChange = (val: string) => {
@@ -137,7 +151,7 @@ export function Composer({
     if (overlayRef.current && taRef.current) overlayRef.current.scrollTop = taRef.current.scrollTop;
   };
 
-  const run = (mode: ComposerAction) => {
+  const run = (mode: ComposerAction, instruction?: string) => {
     if (streaming) return;
     clearGhost();
     const ta = taRef.current;
@@ -160,7 +174,7 @@ export function Composer({
     setStreamingState(true);
     let acc = "";
     streamCtl.current = streamCompose(
-      { mode, goal, context, currentText: base, selection, tone: tone || undefined, length: length || undefined },
+      { mode, goal, context, currentText: base, selection, instruction, tone: tone || undefined, length: length || undefined },
       {
         onDelta: (d) => {
           acc += d;
@@ -188,6 +202,15 @@ export function Composer({
     setStreamingState(false);
   };
 
+  // Auto-run once (e.g. arriving from the home intake with a goal and an empty editor).
+  React.useEffect(() => {
+    if (autoRun === "write" && !autoRan.current && goal?.trim() && !value.trim() && !streaming) {
+      autoRan.current = true;
+      run("write");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoRun, goal]);
+
   React.useEffect(() => {
     return () => {
       streamCtl.current?.abort();
@@ -214,9 +237,28 @@ export function Composer({
           </Button>
         )}
         {actions.includes("improve") && (
-          <Button size="sm" variant="secondary" onClick={() => run("improve")} disabled={streaming}>
-            <Wand2 className="h-4 w-4" /> Improve selection
-          </Button>
+          <Popover open={improveOpen} onOpenChange={setImproveOpen}>
+            <PopoverTrigger asChild>
+              <Button size="sm" variant="secondary" disabled={streaming}>
+                <Wand2 className="h-4 w-4" /> Improve selection <ChevronDown className="h-3.5 w-3.5" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-56">
+              <p className="px-2 pb-1 text-meta text-muted">Improve the selected text…</p>
+              {IMPROVE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.label}
+                  onClick={() => {
+                    setImproveOpen(false);
+                    run("improve", opt.instruction);
+                  }}
+                  className="flex w-full items-center rounded-btn px-2.5 py-2 text-left text-sm text-ink hover:bg-ink/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/70"
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </PopoverContent>
+          </Popover>
         )}
         {streaming && (
           <button onClick={stop} className="inline-flex items-center gap-1 text-meta text-muted underline underline-offset-2 hover:text-ink">
@@ -225,16 +267,17 @@ export function Composer({
         )}
       </div>
 
-      {/* editor with ghost overlay */}
+      {/* editor with inline ghost overlay (light grey autocomplete) */}
       <div className={cn("relative rounded-card border border-line bg-surface", minHeightClass, editorClassName)}>
         <div
           ref={overlayRef}
           aria-hidden
-          className="pointer-events-none absolute inset-0 overflow-auto whitespace-pre-wrap break-words px-3.5 py-3 text-base leading-relaxed text-transparent"
+          className="pointer-events-none absolute inset-0 overflow-auto whitespace-pre-wrap break-words px-3.5 py-3 font-sans text-base leading-relaxed text-transparent"
         >
           {value}
-          {ghost && <span className="text-muted/70">{ghost}</span>}
-          {ghost && <span className="ml-1 align-middle text-meta text-muted/80">⇥</span>}
+          {/* Explicit colour (not a Tailwind opacity class) so it overrides the overlay's
+              transparent text — this is the visible light-grey inline autocomplete. */}
+          {ghost && <span style={{ color: "var(--harbor-muted-soft)" }}>{ghost}</span>}
         </div>
         <textarea
           ref={taRef}
@@ -243,10 +286,11 @@ export function Composer({
           onKeyDown={onKeyDown}
           onScroll={onScroll}
           onSelect={() => ghost && clearGhost()}
+          onBlur={clearGhost}
           disabled={streaming}
           spellCheck
           placeholder={placeholder}
-          className={cn("absolute inset-0 h-full w-full resize-none bg-transparent px-3.5 py-3 text-base leading-relaxed text-ink caret-ink placeholder:text-muted focus-visible:outline-none")}
+          className="absolute inset-0 h-full w-full resize-none bg-transparent px-3.5 py-3 font-sans text-base leading-relaxed text-ink caret-ink placeholder:text-muted focus-visible:outline-none"
         />
       </div>
 
@@ -276,7 +320,11 @@ export function Composer({
                 </PopoverContent>
               </Popover>
             )}
-            {ghost && <span className="text-meta text-muted">suggestion ready — Tab to accept</span>}
+            {ghost ? (
+              <span className="text-meta text-muted">suggestion ready — press Tab to accept</span>
+            ) : (
+              value.trim().length >= 10 && <span className="text-meta text-muted">pause to see a suggestion · Tab to accept</span>
+            )}
           </>
         )}
       </div>
