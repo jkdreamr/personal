@@ -93,11 +93,17 @@ markers follow edits via the `SuggestionMarks` plugin's mapped ranges (no re-sea
 a suggestion is stale only when the text under its mapped range no longer equals the target. Accept
 replaces exactly that mapped range as one undoable transaction.
 
-`SuggestPanel` lists suggestions with Accept / Dismiss / Refresh — all real buttons (keyboard + touch,
-no hover-only). **Hovering** an inline marker pops a `SuggestionHoverCard` anchored to it (the change +
-rationale + Accept/Dismiss), with a short close delay so the pointer can travel into the card; it's a
-convenience over the panel, never the only path. Demo mode (`lib/ai/demo-suggest.ts`) returns
-deterministic local suggestions (with anchors) for testing.
+`SuggestPanel` is built to **explain itself** (users were confused about what it acts on and what it
+can do): the header states the basis ("Based on your goal, anything you've added, and what you've
+written"), the Suggest button has a tooltip, and the loading/empty states name the range. Suggestions
+are **grouped by human kind** — Grammar & punctuation / Clarity / Wording / Length / Flow & structure /
+Ideas to add — so the range is visible at a glance; the raw category slugs become friendly labels
+(`CATEGORY_LABEL` / `GROUP_*` in `suggest-schema.ts`, the single source for the panel and hover card).
+Every suggestion has Accept / Dismiss / Refresh — all real buttons (keyboard + touch, no hover-only).
+**Hovering** an inline marker pops a `SuggestionHoverCard` anchored to it (the change + rationale +
+Accept/Dismiss), with a short close delay so the pointer can travel into the card; it's a convenience
+over the panel, never the only path. Demo mode (`lib/ai/demo-suggest.ts`) returns deterministic local
+suggestions (with anchors) for testing.
 
 ## Editable surfaces beyond prose
 
