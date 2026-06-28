@@ -146,6 +146,22 @@ test.describe("Write studio (demo mode)", () => {
     await expect(editor).toContainText("We use A and we utilize B.");
   });
 
+  test("Suggest: states what it's based on and groups suggestions by kind", async ({ page }) => {
+    await page.goto("/write");
+    const editor = page.getByRole("textbox", { name: "Document editor" });
+    await editor.click();
+    await page.keyboard.type("We will utilize a robust plan to leverage synergy in order to drive game-changing results.");
+    await page.getByRole("button", { name: "Suggest" }).click();
+    const panel = page.getByRole("region", { name: "Editorial suggestions" });
+    // It tells the user what it's looking at.
+    await expect(panel.getByText(/Based on your goal/)).toBeVisible();
+    // Once results land, they're grouped by human kind so the range is visible (this draft → wording + length).
+    await expect(panel.getByRole("listitem").first()).toBeVisible({ timeout: 8000 });
+    // Group headers are the label followed by a count (e.g. "Wording3").
+    await expect(panel.getByText(/^Wording\s*\d+$/)).toBeVisible();
+    await expect(panel.getByText(/^Length\s*\d+$/)).toBeVisible();
+  });
+
   test("inline font: apply a font to just the selected text", async ({ page }) => {
     await page.goto("/write");
     const editor = page.getByRole("textbox", { name: "Document editor" });

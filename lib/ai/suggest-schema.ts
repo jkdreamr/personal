@@ -8,6 +8,7 @@ import { z } from "zod";
 export const SUGGESTION_CATEGORIES = [
   "clarity",
   "concision",
+  "expand",
   "grammar",
   "punctuation",
   "word-choice",
@@ -22,6 +23,65 @@ export const SUGGESTION_CATEGORIES = [
 ] as const;
 
 export type SuggestionCategory = (typeof SUGGESTION_CATEGORIES)[number];
+
+/**
+ * Presentation metadata so the UI can explain ITSELF: a friendly label per category, and a small set
+ * of human "kinds" the panel groups by, so a reader sees the RANGE of what Suggest does at a glance.
+ */
+export type SuggestionGroup = "grammar" | "clarity" | "wording" | "length" | "flow" | "ideas";
+
+export const CATEGORY_LABEL: Record<SuggestionCategory, string> = {
+  clarity: "Clarity",
+  concision: "Tighten",
+  expand: "Expand",
+  grammar: "Grammar",
+  punctuation: "Punctuation",
+  "word-choice": "Word choice",
+  tone: "Tone",
+  style: "Style",
+  flow: "Flow",
+  repetition: "Repetition",
+  structure: "Structure",
+  specificity: "Be specific",
+  consistency: "Consistency",
+  addition: "Add a sentence",
+};
+
+const CATEGORY_GROUP: Record<SuggestionCategory, SuggestionGroup> = {
+  grammar: "grammar",
+  punctuation: "grammar",
+  clarity: "clarity",
+  specificity: "clarity",
+  consistency: "clarity",
+  "word-choice": "wording",
+  tone: "wording",
+  style: "wording",
+  concision: "length",
+  expand: "length",
+  flow: "flow",
+  repetition: "flow",
+  structure: "flow",
+  addition: "ideas",
+};
+
+/** Human label + display order for the groups. */
+export const GROUP_ORDER: SuggestionGroup[] = ["grammar", "clarity", "wording", "length", "flow", "ideas"];
+export const GROUP_LABEL: Record<SuggestionGroup, string> = {
+  grammar: "Grammar & punctuation",
+  clarity: "Clarity",
+  wording: "Wording",
+  length: "Length",
+  flow: "Flow & structure",
+  ideas: "Ideas to add",
+};
+
+export function groupForCategory(category: string): SuggestionGroup {
+  return CATEGORY_GROUP[category as SuggestionCategory] ?? "wording";
+}
+
+export function categoryLabel(category: string): string {
+  return CATEGORY_LABEL[category as SuggestionCategory] ?? category;
+}
 
 export const suggestionSchema = z.object({
   /** An exact substring of the draft to improve. */

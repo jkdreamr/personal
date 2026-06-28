@@ -534,7 +534,14 @@ export function Composer({
             </PopoverContent>
           </Popover>
         )}
-        <Button size="sm" variant="secondary" onClick={runSuggest} disabled={streaming} aria-expanded={suggestOpen}>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={runSuggest}
+          disabled={streaming}
+          aria-expanded={suggestOpen}
+          title="Review your writing against your goal and context — wording, length, clarity, flow, and ideas to add"
+        >
           <Lightbulb className="h-4 w-4" /> Suggest
         </Button>
         {streaming && (

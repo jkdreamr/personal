@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { Check } from "lucide-react";
+import { categoryLabel } from "@/lib/ai/suggest-schema";
 import type { ActiveSuggestion } from "./SuggestPanel";
 
 /**
@@ -49,8 +50,8 @@ export function SuggestionHoverCard({
       className="z-[60] rounded-card border border-line bg-canvas p-3 shadow-lg"
     >
       <div className="flex items-center gap-2">
-        <span className="rounded-chip border border-line bg-surface px-1.5 py-0.5 text-meta font-medium capitalize text-ink/80">
-          {suggestion.category.replace("-", " ")}
+        <span className="rounded-chip border border-line bg-surface px-1.5 py-0.5 text-meta font-medium text-ink/80">
+          {categoryLabel(suggestion.category)}
         </span>
       </div>
       <p className="mt-1.5 text-sm leading-relaxed">
